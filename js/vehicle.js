@@ -3,6 +3,21 @@ import { surface } from './templates.js';
 import { createSurfaceWrap, frontDistance } from './surface-wrap.js';
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
+// Named body islands in the credited 2021 Model Y mesh.
+const modelYPanels = {
+  'MY-291': 'mirror-r', 'MY-292': 'mirror-l',
+  'MY-353': 'door-front-r', 'MY-354': 'door-front-l',
+  'MY-355': 'door-rear-r', 'MY-356': 'door-rear-l',
+  'MY-357': 'bumper-front', 'MY-358': 'hood',
+  'MY-359': 'fender-front-r', 'MY-360': 'fender-front-l',
+  'MY-361': 'pillar-r', 'MY-362': 'pillar-l',
+  'MY-363': 'fender-rear-r', 'MY-364': 'fender-rear-l',
+  'MY-365': 'trunk', 'MY-366': 'bumper-rear', 'MY-367': 'bumper-rear',
+};
+const previewModels = {
+  highland: { file: 'model.glb', length: 4.72, rotation: Math.PI / 2, frontProfile: true },
+  'model-y': { file: 'model-y.glb', length: 4.75, rotation: -Math.PI / 2, panels: modelYPanels },
+};
 const views = {
   angle: [-5.2, 3.05, -5.9],
   front: [0, 3.9, -7.3],
@@ -108,12 +123,12 @@ function separateSkins(position, index) {
   return i => skins.get(root(i));
 }
 
-function prepareCar(source, texture) {
+function prepareCar(source, texture, model) {
   source.updateMatrixWorld(true);
   const bounds = new T.Box3().setFromObject(source);
   const center = bounds.getCenter(new T.Vector3());
-  const scale = 4.72 / (bounds.max.x - bounds.min.x);
-  const transform = new T.Matrix4().makeRotationY(Math.PI / 2)
+  const scale = model.length / (bounds.max.x - bounds.min.x);
+  const transform = new T.Matrix4().makeRotationY(model.rotation)
     .multiply(new T.Matrix4().makeScale(scale, scale, scale))
     .multiply(new T.Matrix4().makeTranslation(-center.x, -bounds.min.y, -center.z));
   const car = new T.Group();
@@ -129,18 +144,39 @@ function prepareCar(source, texture) {
   const trimMaterial = new T.MeshStandardMaterial({ color: '#25252a', roughness: .48, side: T.DoubleSide });
   const trimPositions = [];
   const trimNormals = [];
+  let modelYGlass;
 
   source.traverse(object => {
     if (!object.isMesh) return;
-    const geometry = object.geometry.clone().applyMatrix4(transform.clone().multiply(object.matrixWorld));
-    if (!paintShells.has(object.material.name)) {
-      car.add(new T.Mesh(geometry, materialFor(object.material.name, object.material)));
+    const geometry = object.geometry.clone();
+    // Bake scene transforms into floats so quantized GLB attributes keep their range.
+    for (const name of ['position', 'normal']) {
+      const attribute = geometry.getAttribute(name);
+      if (!attribute || attribute.array instanceof Float32Array) continue;
+      const values = new Float32Array(attribute.count * 3);
+      for (let i = 0; i < attribute.count; i++) {
+        values[i * 3] = attribute.getX(i);
+        values[i * 3 + 1] = attribute.getY(i);
+        values[i * 3 + 2] = attribute.getZ(i);
+      }
+      geometry.setAttribute(name, new T.Float32BufferAttribute(values, 3));
+    }
+    geometry.applyMatrix4(transform.clone().multiply(object.matrixWorld));
+    const mappedPart = model.panels?.[object.name];
+    if (model.panels ? !mappedPart : !paintShells.has(object.material.name)) {
+      let material = model.panels ? object.material : materialFor(object.material.name, object.material);
+      if (model.panels && material.name === 'glass_body') {
+        // Soften reflections on the simplified glass surface.
+        modelYGlass ??= Object.assign(material.clone(), { roughness: .34, metalness: .28, envMapIntensity: .55 });
+        material = modelYGlass;
+      }
+      car.add(new T.Mesh(geometry, material));
       return;
     }
     const position = geometry.getAttribute('position');
     const normal = geometry.getAttribute('normal');
     const index = geometry.getIndex();
-    const skinAt = separateSkins(position, index);
+    const skinAt = mappedPart ? null : separateSkins(position, index);
     for (let i = 0; i < (index?.count ?? position.count); i += 3) {
       const indices = [i, i + 1, i + 2].map(id => index ? index.getX(id) : id);
       const values = indices.map(id => [position.getX(id), position.getY(id), position.getZ(id)]);
@@ -149,7 +185,7 @@ function prepareCar(source, texture) {
       const axleDistance = Math.min(Math.abs(z + 1.48), Math.abs(z - 1.39));
       const wheel = object.material.name === 'Georimblurlfsub01Mtl' &&
         Math.abs(x) > .855 && Math.hypot(y - .345, axleDistance) < .275;
-      const part = wheel ? null : skinAt(indices[0]) || exteriorPart(x, y, z, ny);
+      const part = mappedPart || (wheel ? null : skinAt(indices[0]) || exteriorPart(x, y, z, ny));
       if (part) {
         paintParts.push(part);
         if (!projected.has(part)) projected.set(part, []);
@@ -210,12 +246,13 @@ function prepareCar(source, texture) {
         }
       }
       uv.needsUpdate = true;
-      return createSurfaceWrap(atlas, projected, paintPositions, uv);
+      return createSurfaceWrap(atlas, projected, paintPositions, uv, model.frontProfile);
     },
   };
 }
 
-export async function createViewer(container) {
+export async function createViewer(container, modelId) {
+  const model = previewModels[modelId];
   const renderer = new T.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'low-power' });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
   renderer.setClearColor(0, 0);
@@ -233,7 +270,7 @@ export async function createViewer(container) {
 
   try {
     const { scene: source } = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)
-      .loadAsync(new URL('../assets/models/model.glb', import.meta.url).href);
+      .loadAsync(new URL('../assets/models/' + model.file, import.meta.url).href);
     const pmrem = new T.PMREMGenerator(renderer);
     const room = new RoomEnvironment();
     scene.environment = pmrem.fromScene(room, .035).texture;
@@ -265,7 +302,7 @@ export async function createViewer(container) {
     const texture = new T.CanvasTexture(art.canvas);
     texture.colorSpace = T.SRGBColorSpace;
     texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-    const { car, mapAtlas, partAt } = prepareCar(source, texture);
+    const { car, mapAtlas, partAt } = prepareCar(source, texture, model);
     const ray = new T.Raycaster();
     scene.add(car);
 
@@ -277,13 +314,14 @@ export async function createViewer(container) {
     const request = () => { if (!frame) frame = requestAnimationFrame(draw); };
     function draw(time) {
       frame = 0;
-      if (!container.clientWidth) return;
+      if (!renderer.domElement.isConnected || !container.clientWidth) return;
       if (controls.autoRotate) controls.update(lastTime ? Math.min(.05, (time - lastTime) / 1000) : 0);
       lastTime = time;
       renderer.render(scene, camera);
       if (controls.autoRotate) request();
     }
     function resize() {
+      if (!renderer.domElement.isConnected) return;
       const width = container.clientWidth;
       const height = container.clientHeight;
       if (!width || !height) return;
@@ -305,10 +343,7 @@ export async function createViewer(container) {
       request();
     }
     controls.addEventListener('change', request);
-    container.replaceChildren(renderer.domElement);
     new ResizeObserver(resize).observe(container);
-    setView('angle');
-    resize();
 
     function getProjection() {
       camera.updateMatrixWorld();
@@ -325,6 +360,15 @@ export async function createViewer(container) {
     }
 
     return {
+      mount() {
+        const switched = renderer.domElement.parentElement !== container;
+        if (switched) {
+          container.replaceChildren(renderer.domElement);
+          setView('angle');
+        }
+        resize();
+        return switched;
+      },
       setView,
       setOrbit(enabled) {
         controls.autoRotate = enabled;

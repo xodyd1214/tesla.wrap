@@ -21,8 +21,7 @@ let texture;
 let scratch;
 let overlay;
 let viewer;
-let viewerRequest;
-let viewerFailed = false;
+const previewRequests = new Map();
 let loadVersion = 0;
 let uploadVersion = 0;
 let mode = 'image';
@@ -370,8 +369,9 @@ function setFlat(message) {
 async function showPreview(prepare = false) {
   if (!atlas) return;
   const current = session;
-  if (!current.model.preview || viewerFailed) {
-    setFlat(viewerFailed && current.model.preview ? '3D 연결이 어려워 전개도로 미리 보여 드려요.' : '이 차종은 전개도 프리뷰를 지원해요.');
+  const modelId = current.model.preview;
+  if (!modelId) {
+    setFlat('이 차종은 전개도 프리뷰를 지원해요.');
     return;
   }
   if (!prepare && !viewer && $('preview-stage').clientWidth === 0) return;
@@ -383,9 +383,24 @@ async function showPreview(prepare = false) {
   $('preview-badge').textContent = '3D';
   $('preview-message').hidden = !!viewer;
   try {
-    viewerRequest ??= import('./vehicle.js').then(module => module.createViewer(vehicle));
-    viewer = await viewerRequest;
+    let request = previewRequests.get(modelId);
+    if (!request) {
+      request = {};
+      request.promise = import('./vehicle.js').then(module => module.createViewer(vehicle, modelId)).then(ready => {
+        request.viewer = ready;
+        return ready;
+      }).catch(error => {
+        previewRequests.delete(modelId);
+        throw error;
+      });
+      previewRequests.set(modelId, request);
+    }
+    const ready = await request.promise;
     if (session !== current || !atlas) return;
+    viewer = ready;
+    if (viewer.mount()) {
+      for (const view of $('views').children) view.setAttribute('aria-pressed', view.dataset.view === 'angle');
+    }
     viewer.setAtlas(atlas);
     viewer.updateTexture(texture.canvas);
     $('preview-message').hidden = true;
@@ -394,8 +409,7 @@ async function showPreview(prepare = false) {
     syncPlacement();
   } catch (error) {
     console.warn('Vehicle preview unavailable', error);
-    viewerFailed = true;
-    if (session === current) setFlat('3D를 불러올 수 없어 전개도로 미리 보여 드려요.');
+    if (session === current && atlas) setFlat('3D를 불러올 수 없어 전개도로 미리 보여 드려요.');
   }
 }
 
@@ -414,6 +428,7 @@ async function selectModel(model) {
   $('preview-message').textContent = '차량을 불러오는 중…';
   $('preview-message').hidden = false;
   $('vehicle').hidden = true;
+  if (model.preview !== session?.model.preview) vehicle.replaceChildren();
   flat.hidden = true;
   $('views').hidden = true;
   syncPlacement();
@@ -432,6 +447,7 @@ async function selectModel(model) {
   atlasContext.clearRect(0, 0, atlasCanvas.width, atlasCanvas.height);
   setZoom(1);
   viewer?.setOrbit(false);
+  viewer = previewRequests.get(model.preview)?.viewer;
   $('orbit').setAttribute('aria-pressed', 'false');
 
   try {
@@ -513,7 +529,7 @@ async function loadImage(file, onVehicle = false) {
     const asset = { image: canvas, name: file.name };
     if (target.model.preview && (onVehicle || parts.length > 1) && $('views').hidden) await showPreview(true);
     if (session !== target || version !== uploadVersion || !atlas) return;
-    const projection = target.model.preview && !viewerFailed && (onVehicle || parts.length > 1) ?
+    const projection = target.model.preview && (onVehicle || parts.length > 1) ?
       viewer?.getProjection() : null;
     const layer = fitLayer(asset, parts, projection);
     setSelection(parts.map(part => part.id));

@@ -10,13 +10,13 @@ const plaid = ['hood', 'bumper-front', 'bumper-rear', lf, rf, 'trunk', rrf, lrf,
 const juniper = ['hood', 'bumper-front', lf, rf, lr, rr, 'bumper-rear', lff, rff, lrf, rrf, 'trunk', le, re, rp, lp, ls, rs, lm, rm];
 
 export const models = [
-  { id: 'model3-2024-base', name: 'Model 3 Highland', variant: '2024+ · Standard / Premium', islands: highland, preview: true },
-  { id: 'model3-2024-performance', name: 'Model 3 Highland', variant: '2024+ · Performance', islands: ['hood', 'bumper-rear', 'bumper-front', rrf, lrf, lf, rf, 'trunk', rr, lr, lff, rff, 'trim-rear', lp, rp, rm, lm], preview: true },
+  { id: 'model3-2024-base', name: 'Model 3 Highland', variant: '2024+ · Standard / Premium', islands: highland, preview: 'highland' },
+  { id: 'model3-2024-performance', name: 'Model 3 Highland', variant: '2024+ · Performance', islands: ['hood', 'bumper-rear', 'bumper-front', rrf, lrf, lf, rf, 'trunk', rr, lr, lff, rff, 'trim-rear', lp, rp, rm, lm], preview: 'highland' },
   { id: 'model3', name: 'Model 3', variant: '기존 모델', islands: ['bumper-front', 'hood', 'bumper-rear', 'trunk', lrf, rrf, lf, rf, lr, rr, lff, rff, lp, rp, rm, lm] },
   { id: 'modely-2025-premium', name: 'Model Y Juniper', variant: '2025+ · Premium', islands: juniper },
   { id: 'modely-2025-base', name: 'Model Y Juniper', variant: '2025+ · Standard', islands: ['hood', rf, lf, 'bumper-front', rr, lr, 'trunk', 'bumper-rear', lff, rff, rrf, lrf, re, le, lp, rp, rm, lm] },
   { id: 'modely-2025-performance', name: 'Model Y Juniper', variant: '2025+ · Performance', islands: ['hood', 'bumper-front', lf, rf, lr, rr, 'bumper-rear', lff, rff, rrf, lrf, 'trunk', lp, rp, re, le, rs, ls, 'corner-r', 'corner-l', lm, rm] },
-  { id: 'modely', name: 'Model Y', variant: '기존 모델', islands: ['hood', 'bumper-front', 'trunk', rf, lf, lr, rr, 'bumper-rear', rff, lff, rrf, lrf, lp, rp, rm, lm] },
+  { id: 'modely', name: 'Model Y', variant: '기존 모델', islands: ['hood', 'bumper-front', 'trunk', rf, lf, lr, rr, 'bumper-rear', rff, lff, rrf, lrf, lp, rp, rm, lm], preview: 'model-y' },
   { id: 'modely-l', name: 'Model Y L', variant: '', islands: ['hood', 'bumper-front', lf, rf, rr, lr, rrf, lrf, 'bumper-rear', lff, rff, rp, lp, le, re, 'trunk', rs, ls, rm, lm] },
   { id: 'models-2021', name: 'Model S', variant: '2021+', islands: plaid },
   { id: 'models-2025-plaid', name: 'Model S Plaid', variant: '2025+', islands: [plaid[0], plaid[2], plaid[1], ...plaid.slice(3, 14), ls, lp, rp, lm, rm] },
@@ -89,7 +89,7 @@ export async function loadTemplate(model) {
   const byPart = new Map();
   for (const [index, pixels] of components.entries()) {
     const id = model.islands[index];
-    if (model.preview && (id === lrf || id === rrf)) {
+    if (model.preview === 'highland' && (id === lrf || id === rrf)) {
       const whichSide = id.slice(-1);
       const cutoff = Math.round(height * .782) * width;
       byPart.set(id, pixels.filter(i => i >= cutoff));

@@ -111,7 +111,7 @@ function surfacePositions(atlas, part, entries, positions, uv) {
   return { points, pixels: queue.subarray(0, end) };
 }
 
-export function createSurfaceWrap(atlas, parts, positions, uv) {
+export function createSurfaceWrap(atlas, parts, positions, uv, useFrontProfile) {
   const maps = new Map();
   const images = new WeakMap();
   const stamp = surface(atlas.width, atlas.height);
@@ -119,7 +119,7 @@ export function createSurfaceWrap(atlas, parts, positions, uv) {
   return {
     fit(asset, selection, projection) {
       if (!selection.length || !selection.every(part => parts.has(part.id))) return null;
-      const front = selection.every(part => frontParts.has(part.id)) &&
+      const front = useFrontProfile && selection.every(part => frontParts.has(part.id)) &&
         selection.some(part => part.id === 'hood') && selection.some(part => part.id === 'bumper-front');
       const { right, down } = projection;
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
