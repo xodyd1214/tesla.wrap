@@ -8,7 +8,7 @@ The mesh comes from the [Tesla Studio conversion](https://github.com/aditano/tes
 
 The preview uses [Tesla Model Y 2021](https://sketchfab.com/3d-models/tesla-model-y-2021-c0a86cac582d4b33aba0fb1b1912d970) by [763468712](https://sketchfab.com/763468712), licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). The original attribution is in [model-y-LICENSE.txt](model-y-LICENSE.txt).
 
-The asset incorporates adaptations by [Tina 3D Tesla](https://github.com/Tina2088/tina-3d-tesla/tree/main/public/models) and [Jevpilot](https://github.com/standardagents/jevpilot/tree/80c5737406d9012ed76788d8706f9ac10018783e/public/models/model-y). Wrap Studio converted the Jevpilot GLB from Draco to Meshopt compression and maps the paint islands approximately to Tesla's original Model Y wrap template.
+The asset uses the [Tina 3D Tesla adaptation](https://github.com/Tina2088/tina-3d-tesla/tree/main/public/models). Wrap Studio applies Meshopt compression without further mesh simplification, adjusts the preview headlight material, and maps the paint islands approximately to Tesla's original Model Y wrap template.
 
 # Original Tesla Model 3
 

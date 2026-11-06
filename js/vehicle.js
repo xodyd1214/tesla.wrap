@@ -14,6 +14,7 @@ const modelYPanels = {
   'MY-363': 'fender-rear-r', 'MY-364': 'fender-rear-l',
   'MY-365': 'trunk', 'MY-366': 'bumper-rear', 'MY-367': 'bumper-rear',
 };
+const modelYHeadlightNodes = new Set(['MY-228', 'MY-229', 'MY-267', 'MY-268']);
 const legacyModel3Panels = {
   Object_246: 'trunk', Object_336: 'door-rear-l', Object_394: 'door-rear-r',
   Object_428: 'bumper-front', Object_435: 'bumper-rear', Object_445: 'hood',
@@ -206,6 +207,7 @@ function prepareCar(source, texture, model) {
   const trimPositions = [];
   const trimNormals = [];
   let modelYGlass;
+  let modelYHeadlights;
 
   source.traverse(object => {
     // The legacy asset's separate charge flap protrudes from the closed body.
@@ -233,6 +235,13 @@ function prepareCar(source, texture, model) {
         // Soften reflections on the simplified glass surface.
         modelYGlass ??= Object.assign(material.clone(), { roughness: .34, metalness: .28, envMapIntensity: .55 });
         material = modelYGlass;
+      } else if (modelYHeadlightNodes.has(object.name)) {
+        // Keep the lenses distinct from the white paint in the front view.
+        if (!modelYHeadlights) {
+          modelYHeadlights = Object.assign(material.clone(), { roughness: .28, metalness: .22 });
+          modelYHeadlights.color.set('#8997a8');
+        }
+        material = modelYHeadlights;
       }
       car.add(new T.Mesh(geometry, material));
       return;
