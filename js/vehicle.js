@@ -44,20 +44,23 @@ const views = {
   top: [0, 9, 0.005],
 };
 
-function exteriorPart(x, y, z, ny) {
+function exteriorPart(x, y, z, ny, outerShell) {
   const side = x < 0 ? 'l' : 'r';
   const a = Math.abs(x);
   if (a > .84 && y > .87 && z > -.79 && z < -.54) return 'mirror-' + side;
+  // Only the exterior shell carries the painted rail above the side windows.
+  // The other meshes contain the dark B-pillars and quarter-window surrounds.
+  if (outerShell && a > .49 && a < .82 && y > (z < -.8 ? .918 : .94) && z > -1.02 && z < 1.78 &&
+    (z < 1.08 || y > 1.07)) return 'pillar-' + side;
   if (z > 1.55 && y > .77 && a < .775 && ny > .26) return 'trunk';
   if (z > 2.17 && y > .65 && y < .79 && a < .64) return 'trim-rear';
   // The fender tips above the headlights extend inward toward the hood seam.
   if (a > .48 && y > .68 && z > -2.13 && z < -1.72 && ny > .5) return 'fender-front-' + side;
-  if (y > .2 && (z < -2.05 || z < -1.85 && y < .53)) return 'bumper-front';
+  if (y > (outerShell ? .16 : .2) && (z < -2.05 || z < -1.85 && y < .53)) return 'bumper-front';
   if (y > .21 && (z > 2.09 || z > 1.78 && y < .6 && a > .68)) return 'bumper-rear';
   if (a > .65 && y > .27 && z < -.95 && z > -2.13) return 'fender-front-' + side;
-  if (a > .61 && a < .81 && y > 1.03 && z > -1.16 && z < 1.66) return 'pillar-' + side;
-  if (a > .73 && y > .44 && z >= 1.18 && z <= 2.09) return 'fender-rear-' + side;
-  if (a > .59 && y > .145 && y < .29 && z > -1.08 && z < 1.02) return 'sill-' + side;
+  if ((a > .73 || outerShell && a > .66 && y < 1.07) && y > .44 && z >= 1.18 && z <= 2.09) return 'fender-rear-' + side;
+  if ((a > .59 && y > .145 || outerShell && a > .74) && y < .29 && z > -1.08 && z < 1.02) return 'sill-' + side;
   if (a > .77 && y >= .25 && y < .96 && z > -.955 && z < 1.24) {
     return (z < .212 ? 'door-front-' : 'door-rear-') + side;
   }
@@ -72,8 +75,8 @@ function materialFor(name, original) {
   if (name === 'Ln7Mtl') return dark('#dddce7', .28);
   if (/extwindow|sub31Mtl/.test(name)) {
     return new T.MeshPhysicalMaterial({
-      color: '#20222b', metalness: .38, roughness: .18, clearcoat: .9,
-      side: T.DoubleSide,
+      color: '#20222b', metalness: .18, roughness: .28, clearcoat: .55,
+      clearcoatRoughness: .22, envMapIntensity: .65, side: T.DoubleSide,
     });
   }
   if (name === 'Geohoodsub00031Mtl') return dark('#34343a', .26);
@@ -230,6 +233,7 @@ function prepareCar(source, texture, model) {
     geometry.applyMatrix4(transform.clone().multiply(object.matrixWorld));
     const mappedPart = model.panels?.[object.name];
     const highlandPaint = model.highland && paintShells.has(object.material.name);
+    const outerShell = object.material.name === 'Geohoodsub00021Mtl';
     const classify = highlandPaint ? highlandSkin : model.skin?.(object.name);
     if (!mappedPart && !classify) {
       let material = model.highland ? materialFor(object.material.name, object.material) : object.material;
@@ -269,7 +273,7 @@ function prepareCar(source, texture, model) {
       const axleDistance = Math.min(Math.abs(z + 1.48), Math.abs(z - 1.39));
       const wheel = object.material.name === 'Georimblurlfsub01Mtl' &&
         Math.abs(x) > .855 && Math.hypot(y - .345, axleDistance) < .275;
-      let part = mappedPart || (wheel ? null : skinAt?.(indices[0]) || (highlandPaint ? exteriorPart(x, y, z, ny) : null));
+      let part = mappedPart || (wheel ? null : skinAt?.(indices[0]) || (highlandPaint ? exteriorPart(x, y, z, ny, outerShell) : null));
       if (model.rearCorners && part === 'bumper-rear' && Math.abs(x) > .83 && y < .6 && z > 1.65 && z < 2.12) {
         part = x < 0 ? 'corner-l' : 'corner-r';
       }
