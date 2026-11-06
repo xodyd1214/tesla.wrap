@@ -4,6 +4,42 @@ function dot(axis, x, y, z) {
   return axis[0] * x + axis[1] * y + axis[2] * z;
 }
 
+const frontParts = new Set(['hood', 'bumper-front', 'fender-front-l', 'fender-front-r']);
+// Highland's centerline in model coordinates, from the windshield to the bumper lip.
+const frontProfile = [
+  [-1.1, .9], [-1.75, .805], [-2.2, .666], [-2.285, .613], [-2.35, .55], [-2.35, .2],
+];
+let frontLength = 0;
+const frontSegments = frontProfile.slice(1).map(([endZ, endY], i) => {
+  const [z, y] = frontProfile[i];
+  const dz = endZ - z;
+  const dy = endY - y;
+  const length = Math.hypot(dz, dy);
+  const start = frontLength;
+  frontLength += length;
+  return { z, y, dz: dz / length, dy: dy / length, start, length };
+});
+
+export function frontDistance(x, y, z) {
+  // The nose curves back around the sides. Compare it with the centerline
+  // after accounting for that sweep near the bumper.
+  const sweep = Math.max(0, Math.min(1, (-z - 1.5) / .5));
+  const centerZ = z - .36 * x * x * sweep;
+  let distance = 0;
+  let closest = Infinity;
+  for (const segment of frontSegments) {
+    const dz = centerZ - segment.z;
+    const dy = y - segment.y;
+    const along = Math.max(0, Math.min(segment.length, dz * segment.dz + dy * segment.dy));
+    const error = (dz - along * segment.dz) ** 2 + (dy - along * segment.dy) ** 2;
+    if (error < closest) {
+      closest = error;
+      distance = segment.start + along;
+    }
+  }
+  return distance;
+}
+
 // Choose the outside skin where several mesh faces share the same template UV.
 function outsideDepth(id, x, y, z) {
   if (id === 'bumper-front') return -z;
@@ -83,13 +119,15 @@ export function createSurfaceWrap(atlas, parts, positions, uv) {
   return {
     fit(asset, selection, projection) {
       if (!selection.length || !selection.every(part => parts.has(part.id))) return null;
+      const front = selection.every(part => frontParts.has(part.id)) &&
+        selection.some(part => part.id === 'hood') && selection.some(part => part.id === 'bumper-front');
       const { right, down } = projection;
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
       for (const part of selection) {
         for (const { index } of parts.get(part.id)) {
           const x = positions[index * 3], y = positions[index * 3 + 1], z = positions[index * 3 + 2];
-          const u = dot(right, x, y, z);
-          const v = dot(down, x, y, z);
+          const u = front ? -x : dot(right, x, y, z);
+          const v = front ? frontDistance(x, y, z) : dot(down, x, y, z);
           x0 = Math.min(x0, u);
           x1 = Math.max(x1, u);
           y0 = Math.min(y0, v);
@@ -97,19 +135,31 @@ export function createSurfaceWrap(atlas, parts, positions, uv) {
         }
       }
       const { width, height } = asset.image;
-      return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, fit: Math.max((x1 - x0) / width, (y1 - y0) / height) };
+      return {
+        x: (x0 + x1) / 2, y: (y0 + y1) / 2,
+        fit: Math.max((x1 - x0) / width, (y1 - y0) / height),
+        projection: front === !!projection.front ? projection : { ...projection, front },
+      };
     },
     draw(ctx, layer, part) {
       if (!maps.has(part.id)) {
         const map = surfacePositions(atlas, part, parts.get(part.id), positions, uv);
         maps.set(part.id, { ...map, output: stamp.ctx.createImageData(part.width, part.height) });
       }
-      const { points, pixels, output } = maps.get(part.id);
+      const map = maps.get(part.id);
+      const { points, pixels, output } = map;
       const image = layer.asset.image;
       const { width, height } = image;
       if (!images.has(image)) images.set(image, image.getContext('2d').getImageData(0, 0, width, height).data);
       const source = images.get(image);
-      const { right, down } = layer.projection;
+      const { right, down, front } = layer.projection;
+      if (front && !map.frontRows) {
+        map.frontRows = new Float32Array(output.width * output.height);
+        for (const pixel of pixels) {
+          const offset = pixel * 3;
+          map.frontRows[pixel] = frontDistance(points[offset], points[offset + 1], points[offset + 2]);
+        }
+      }
       const factor = layer.fit * layer.scale / 100;
       const angle = layer.rotation * Math.PI / 180;
       const cos = Math.cos(angle) / factor;
@@ -117,8 +167,8 @@ export function createSurfaceWrap(atlas, parts, positions, uv) {
       for (const pixel of pixels) {
         const offset = pixel * 3;
         const x = points[offset], y = points[offset + 1], z = points[offset + 2];
-        const u = dot(right, x, y, z) - layer.x;
-        const v = dot(down, x, y, z) - layer.y;
+        const u = (front ? -x : dot(right, x, y, z)) - layer.x;
+        const v = (front ? map.frontRows[pixel] : dot(down, x, y, z)) - layer.y;
         const sx = Math.floor(u * cos + v * sin + width / 2);
         const sy = Math.floor(v * cos - u * sin + height / 2);
         const dest = pixel * 4;

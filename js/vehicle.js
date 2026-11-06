@@ -1,6 +1,6 @@
 import { THREE as T, GLTFLoader, MeshoptDecoder, OrbitControls, RoomEnvironment } from '../assets/vendor/three-preview.js';
 import { surface } from './templates.js';
-import { createSurfaceWrap } from './surface-wrap.js';
+import { createSurfaceWrap, frontDistance } from './surface-wrap.js';
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
 const views = {
@@ -337,14 +337,16 @@ export async function createViewer(container) {
         surfaceWrap = mapAtlas(atlas);
       },
       getProjection,
-      hitPart(clientX, clientY) {
+      hitSurface(clientX, clientY) {
         const rect = renderer.domElement.getBoundingClientRect();
         camera.updateMatrixWorld();
         ray.setFromCamera(new T.Vector2(
           2 * (clientX - rect.left) / rect.width - 1,
           1 - 2 * (clientY - rect.top) / rect.height,
         ), camera);
-        return partAt(ray.intersectObject(car)[0]);
+        const hit = ray.intersectObject(car)[0];
+        const part = partAt(hit);
+        return part ? { part, point: hit.point } : null;
       },
       fitProjection(asset, parts, projection) {
         return surfaceWrap?.fit(asset, parts, projection);
@@ -358,17 +360,28 @@ export async function createViewer(container) {
         controls.enabled = !placement;
         if (!placement) return;
         controls.autoRotate = false;
-        const distance = camera.position.distanceTo(controls.target);
-        camera.position.fromArray(placement.normal).multiplyScalar(distance).add(controls.target);
+        if (!placement.front) {
+          const distance = camera.position.distanceTo(controls.target);
+          camera.position.fromArray(placement.normal).multiplyScalar(distance).add(controls.target);
+        }
         controls.update();
         request();
       },
       dragScale,
-      dragAxes(projection) {
+      dragAxes(projection, point) {
         const view = getProjection();
         const scale = dragScale();
         const right = new T.Vector3().fromArray(view.right).multiplyScalar(scale);
         const down = new T.Vector3().fromArray(view.down).multiplyScalar(scale);
+        if (projection.front) {
+          const { x, y, z } = point ?? { x: 0, y: .68, z: -2.15 };
+          const v = frontDistance(x, y, z);
+          return {
+            xx: -right.x, xy: -down.x,
+            yx: frontDistance(x + right.x, y + right.y, z + right.z) - v,
+            yy: frontDistance(x + down.x, y + down.y, z + down.z) - v,
+          };
+        }
         const u = new T.Vector3().fromArray(projection.right);
         const v = new T.Vector3().fromArray(projection.down);
         return { xx: right.dot(u), xy: down.dot(u), yx: right.dot(v), yy: down.dot(v) };
