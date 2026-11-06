@@ -271,10 +271,6 @@ function scheduleRender(dirty = true) {
   });
 }
 
-function groupMembers(group) {
-  return atlas.parts.filter(part => group === 'all' || part.id.startsWith('door-') && part.id.endsWith('-' + group)).map(part => part.id);
-}
-
 function updateRange(id, value) {
   const input = $(id);
   const progress = (value - Number(input.min)) / (Number(input.max) - Number(input.min)) * 100;
@@ -298,11 +294,8 @@ function sync(dirty = true) {
     button.setAttribute('aria-pressed', session.selected.has(id));
     button.style.setProperty('--dot', getImageAt(id) ? '#c5b0f4' : session.colors[id] || '#fff');
   }
-  for (const button of document.querySelectorAll('[data-group]')) {
-    const ids = groupMembers(button.dataset.group);
-    button.disabled = !ids.length;
-    button.setAttribute('aria-pressed', ids.length > 0 && ids.length === session.selected.size && ids.every(id => session.selected.has(id)));
-  }
+  $('select-all').disabled = !atlas.parts.length;
+  $('select-all').setAttribute('aria-pressed', atlas.parts.length > 0 && atlas.parts.every(part => session.selected.has(part.id)));
   for (const button of $('swatches').children) {
     button.disabled = !session.selected.size;
     button.setAttribute('aria-pressed', session.selected.size > 0 &&
@@ -434,7 +427,8 @@ async function selectModel(model) {
   transformTools.hidden = true;
   $('expand-parts').disabled = true;
   for (const id of ['undo', 'redo', 'reset', 'export', 'upload', 'apply-color']) $(id).disabled = true;
-  for (const button of document.querySelectorAll('[data-group], .swatch')) button.disabled = true;
+  $('select-all').disabled = true;
+  for (const button of document.querySelectorAll('.swatch')) button.disabled = true;
   atlasContext.clearRect(0, 0, atlasCanvas.width, atlasCanvas.height);
   setZoom(1);
   viewer?.setOrbit(false);
@@ -611,12 +605,10 @@ $('expand-parts').addEventListener('click', () => {
   $('expand-parts').setAttribute('aria-expanded', expanded);
   $('expand-parts').firstElementChild.textContent = expanded ? '파츠 목록 접기' : '파츠 목록 펼치기';
 });
-for (const button of document.querySelectorAll('[data-group]')) {
-  button.addEventListener('click', () => {
-    if (!atlas) return;
-    setSelection(button.getAttribute('aria-pressed') === 'true' ? [] : groupMembers(button.dataset.group));
-  });
-}
+$('select-all').addEventListener('click', event => {
+  if (!atlas) return;
+  setSelection(event.currentTarget.getAttribute('aria-pressed') === 'true' ? [] : atlas.parts.map(part => part.id));
+});
 
 for (const button of document.querySelectorAll('[data-mode]')) {
   button.addEventListener('click', () => {

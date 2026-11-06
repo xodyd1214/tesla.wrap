@@ -114,10 +114,8 @@
           <div class="pane-heading inspector-heading"><h2 id="inspector-heading">편집 도구</h2></div>
           <section class="inspector-section parts-section" aria-labelledby="parts-heading">
             <div class="inspector-title"><h3 id="parts-heading">파츠</h3><span id="count" class="count">0개 선택</span></div>
-            <div class="groups" role="group" aria-label="파츠 그룹">
-              <button class="small-pill" type="button" data-group="all">전체 선택</button>
-              <button class="small-pill" type="button" data-group="l">왼쪽 도어</button>
-              <button class="small-pill" type="button" data-group="r">오른쪽 도어</button>
+            <div class="groups">
+              <button id="select-all" class="small-pill" type="button" aria-pressed="false" disabled>전체 선택</button>
             </div>
             <div id="parts" class="parts-grid" aria-label="선택 가능한 파츠"></div>
             <button id="expand-parts" class="part-expander" type="button" aria-expanded="false" aria-controls="parts"><span>파츠 목록 펼치기</span><svg class="icon"><use href="#i-chevron"/></svg></button>
