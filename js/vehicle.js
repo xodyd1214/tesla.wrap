@@ -14,6 +14,8 @@ function exteriorPart(x, y, z, ny) {
   if (a > .84 && y > .87 && z > -.79 && z < -.54) return 'mirror-' + side;
   if (z > 1.55 && y > .77 && a < .775 && ny > .26) return 'trunk';
   if (z > 2.17 && y > .65 && y < .79 && a < .64) return 'trim-rear';
+  // The fender tips above the headlights extend inward toward the hood seam.
+  if (a > .48 && y > .68 && z > -2.13 && z < -1.72 && ny > .5) return 'fender-front-' + side;
   if (y > .2 && (z < -2.05 || z < -1.85 && y < .53)) return 'bumper-front';
   if (y > .21 && (z > 2.09 || z > 1.78 && y < .6 && a > .68)) return 'bumper-rear';
   if (a > .65 && y > .27 && z < -.95 && z > -2.13) return 'fender-front-' + side;
