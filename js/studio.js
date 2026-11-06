@@ -46,11 +46,11 @@ const clamp = (n, low, high) => Math.min(high, Math.max(low, n));
 
 function demoImage() {
   const { canvas, ctx } = surface(960, 780);
-  ctx.fillStyle = '#212733';
+  ctx.fillStyle = '#27322d';
   ctx.fillRect(0, 0, 960, 780);
   const lines = [
-    [-72, 90, '#353e50'], [-16, 8, '#818c9e'], [5, 3, '#c5c3d7'],
-    [28, 23, '#a5a1bc'], [54, 4, '#d2d3df'], [76, 9, '#6d778d'],
+    [-72, 90, '#3c4d43'], [-16, 8, '#8a9a88'], [5, 3, '#dce5d5'],
+    [28, 23, '#adbda2'], [54, 4, '#d7ebac'], [76, 9, '#687f6d'],
   ];
   for (const [offset, width, color] of lines) {
     ctx.strokeStyle = color;
@@ -214,14 +214,14 @@ function selectionOverlay(part) {
   const { canvas, ctx } = surface(part.width + 6, part.height + 6);
   for (const [x, y] of [[0, 3], [6, 3], [3, 0], [3, 6]]) ctx.drawImage(part.mask, x, y);
   ctx.globalCompositeOperation = 'source-in';
-  ctx.fillStyle = '#1f1d3d';
+  ctx.fillStyle = '#365a34';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.globalCompositeOperation = 'destination-out';
   ctx.drawImage(part.mask, 3, 3);
   const tint = surface(part.width, part.height);
   tint.ctx.drawImage(part.mask, 0, 0);
   tint.ctx.globalCompositeOperation = 'source-in';
-  tint.ctx.fillStyle = 'rgba(197, 176, 244, .27)';
+  tint.ctx.fillStyle = 'rgba(164, 194, 139, .29)';
   tint.ctx.fillRect(0, 0, part.width, part.height);
   part.selection = { outline: canvas, tint: tint.canvas };
   return part.selection;
@@ -291,7 +291,7 @@ function sync(dirty = true) {
   for (const button of partsGrid.children) {
     const id = button.dataset.part;
     button.setAttribute('aria-pressed', session.selected.has(id));
-    button.style.setProperty('--dot', getImageAt(id) ? '#c5b0f4' : session.colors[id] || '#fff');
+    button.style.setProperty('--dot', getImageAt(id) ? '#adc79b' : session.colors[id] || '#fff');
   }
   $('select-all').disabled = !atlas.parts.length;
   $('select-all').setAttribute('aria-pressed', atlas.parts.length > 0 && atlas.parts.every(part => session.selected.has(part.id)));
@@ -460,7 +460,7 @@ async function selectModel(model) {
       const firstVisit = sessions.size === 0 && model === models[0];
       const colors = firstVisit ? Object.fromEntries(layout.parts.map(part => [
         part.id,
-        part.id.startsWith('mirror-') ? '#868995' : '#cdd0d7',
+        part.id.startsWith('mirror-') ? '#78817b' : '#cbd1cc',
       ])) : {};
       const layers = firstVisit ? [fitLayer(demoImage(), [initial])] : [];
       sessions.set(model.id, {

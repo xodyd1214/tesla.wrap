@@ -428,8 +428,8 @@ export async function createViewer(container, modelId) {
       const height = container.clientHeight;
       if (!width || !height) return;
       const aspect = width / height;
-      const verticalHalf = currentView === 'top' ? model.length / 2 + .22 : 2.39;
-      const half = Math.max(2.68, verticalHalf * aspect);
+      const verticalHalf = currentView === 'top' ? model.length / 2 + .22 : 2.27;
+      const half = Math.max(2.52, verticalHalf * aspect);
       camera.left = -half;
       camera.right = half;
       camera.top = half / aspect;
