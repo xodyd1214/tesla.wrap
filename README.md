@@ -23,7 +23,7 @@ python3 -m http.server 8042 --bind 127.0.0.1
 - 파츠 버튼이나 전개도 자체를 눌러 선택합니다. **전체 선택**을 다시 누르면 선택을 해제합니다.
 - PNG, JPG, WebP를 올리고 이미지를 끌어 이동합니다. 크기와 회전 슬라이더도 사용할 수 있습니다. 색상 탭에서 선택한 파츠의 이미지를 단색으로 교체할 수 있습니다.
 - 3D 프리뷰가 있는 차종에서 여러 파츠를 선택해 이미지를 올리면 차량 표면에 한 장으로 배치합니다. Model 3 Highland에서 보닛과 앞 범퍼를 함께 선택하면 차체 앞쪽의 곡면을 따라 이미지를 연결합니다. 그 외에는 이미지를 올릴 때의 3D 시점을 기준으로 투영합니다. 차량 위에서 끌어 위치를 맞추면 전개도와 PNG에도 같은 배치가 반영됩니다. 이미 올린 이미지는 **차량에 배치**로 전환할 수 있습니다.
-- Model 3 Highland의 Standard / Premium 및 Performance와 기존 Model Y에 회전 가능한 3D 프리뷰를 제공합니다. Highland의 두 트림은 동일한 메시를 사용하며, 랩은 각 파츠에 근사 투영됩니다. 다른 차종과 WebGL을 사용할 수 없는 브라우저에는 전개도 프리뷰가 표시됩니다.
+- 기존 Model 3, Model 3 Highland, 기존 Model Y, Model Y Juniper에 회전 가능한 3D 프리뷰를 제공합니다. Highland와 Juniper는 차종별로 같은 3D 메시를 공유하며 트림마다 해당 전개도를 사용합니다. 랩은 각 파츠에 근사 투영됩니다. 다른 차종과 WebGL을 사용할 수 없는 브라우저에는 전개도 프리뷰가 표시됩니다.
 - 내보내기는 공식 전개도 비율을 유지합니다. PNG가 1 MB를 넘으면 크기를 단계적으로 낮춥니다. 차량 전송은 Tesla 앱의 **Creations → Wrap → Upload** 또는 USB의 `Wraps` 폴더를 이용합니다. [Tesla 적용 안내](https://github.com/teslamotors/custom-wraps#how-to-use-custom-wraps)
 
 ## 출처

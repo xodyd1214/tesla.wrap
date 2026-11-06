@@ -43,7 +43,7 @@ export function frontDistance(x, y, z) {
 // Choose the outside skin where several mesh faces share the same template UV.
 function outsideDepth(id, x, y, z) {
   if (id === 'bumper-front') return -z;
-  if (id === 'bumper-rear' || id === 'trim-rear') return z;
+  if (id === 'bumper-rear' || id === 'trim-rear' || id.startsWith('corner-')) return z;
   if (id === 'hood' || id === 'trunk' || id.startsWith('mirror')) return y;
   return id.endsWith('-l') ? -x : x;
 }

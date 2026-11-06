@@ -14,9 +14,16 @@ const modelYPanels = {
   'MY-363': 'fender-rear-r', 'MY-364': 'fender-rear-l',
   'MY-365': 'trunk', 'MY-366': 'bumper-rear', 'MY-367': 'bumper-rear',
 };
+const legacyModel3Panels = {
+  Object_246: 'trunk', Object_336: 'door-rear-l', Object_394: 'door-rear-r',
+  Object_428: 'bumper-front', Object_435: 'bumper-rear', Object_445: 'hood',
+  Charge_Cap_GLOBAL001: 'fender-rear-l',
+};
 const previewModels = {
   highland: { file: 'model.glb', length: 4.72, rotation: Math.PI / 2, frontProfile: true },
   'model-y': { file: 'model-y.glb', length: 4.75, rotation: -Math.PI / 2, panels: modelYPanels },
+  'model-3': { file: 'model-3.glb', length: 4.69, panels: legacyModel3Panels, skin: legacyModel3Skin },
+  juniper: { file: 'juniper.glb', length: 4.794, skin: juniperSkin, rearCorners: true },
 };
 const views = {
   angle: [-5.2, 3.05, -5.9],
@@ -66,15 +73,64 @@ function materialFor(name, original) {
 
 function projection(part, x, y, z) {
   if (part === 'hood' || part === 'trunk' || part.startsWith('mirror')) return [x, z];
+  if (part.startsWith('corner-')) return [-x, -y];
   if (part.startsWith('bumper') || part === 'trim-rear') {
     return [part === 'bumper-rear' ? -x : x, -y];
   }
   return [part.endsWith('-l') ? y : -y, z];
 }
 
-// The imported car has two paint meshes. Rejoin coincident vertices to find
-// whole hood and door skins before using position ranges on the fused shell.
-function separateSkins(position, index) {
+function highlandSkin([x0, y0, z0, x1, y1, z1]) {
+  const side = x0 < 0 ? 'l' : 'r';
+  const lateral = x0 > .65 || x1 < -.65;
+  if (x0 > -.75 && x0 < -.7 && x1 > .7 && x1 < .75 &&
+    y0 > .41 && y1 < .925 && z0 < -2.26 && z0 > -2.3 && z1 < -1.075 && z1 > -1.13) {
+    return 'hood';
+  }
+  if (lateral && y0 > .22 && y0 < .32 && y1 > .84 && y1 < 1.055) {
+    if (z0 > -.99 && z0 < -.87 && z1 > .15 && z1 < .27) return 'door-front-' + side;
+    if (z0 > .17 && z0 < .29 && z1 > 1.15 && z1 < 1.34) return 'door-rear-' + side;
+  }
+  return null;
+}
+
+function legacyModel3Skin(name) {
+  if (name === 'Object_51') return ([x0, y0, z0]) => {
+    const side = x0 < 0 ? 'l' : 'r';
+    if (z0 < -1.8) return 'fender-front-' + side;
+    return (y0 > .8 ? 'pillar-' : 'fender-rear-') + side;
+  };
+  if (name === 'Object_307' || name === 'Object_367') return ([x0, y0]) =>
+    (y0 > .85 ? 'mirror-' : 'door-front-') + (x0 < 0 ? 'l' : 'r');
+  return null;
+}
+
+function juniperSkin(name) {
+  if (name === 'Plane_Mesh002') return ([x0, y0, z0, x1, , z1]) => {
+    const side = x0 < 0 ? 'l' : 'r';
+    const spansCenter = x0 < 0 && x1 > 0;
+    if (spansCenter) {
+      if (z1 < -1.5) return 'bumper-front';
+      if (z0 < -2) return 'hood';
+      return 'trunk';
+    }
+    if (z0 < -1.8) return 'fender-front-' + side;
+    if (z0 > 1.6 && y0 < .65) return 'end-' + side;
+    if (z0 > 1.2) return 'fender-rear-' + side;
+    if (y0 > 1) return 'pillar-' + side;
+    return (z0 < 0 ? 'door-front-' : 'door-rear-') + side;
+  };
+  if (name === 'Plane021_Mesh012') return ([x0, y0, z0, x1, , z1]) => {
+    if (z0 > .8) return 'bumper-rear';
+    if (x0 < 0 && x1 > 0) return 'bumper-front';
+    return (z1 < -.9 ? 'fender-front-' : 'sill-') + (x0 < 0 ? 'l' : 'r');
+  };
+  if (name === 'Plane046_Mesh032') return ([x0]) => 'mirror-' + (x0 < 0 ? 'l' : 'r');
+  return null;
+}
+
+// Rejoin coincident vertices so each connected paint skin can be assigned as a unit.
+function separateSkins(position, index, classify) {
   const parents = new Uint32Array(position.count);
   const vertices = new Map();
   const point = i => [position.getX(i), position.getY(i), position.getZ(i)];
@@ -109,16 +165,9 @@ function separateSkins(position, index) {
     }
   }
   const skins = new Map();
-  for (const [id, [x0, y0, z0, x1, y1, z1]] of bounds) {
-    const side = x0 < 0 ? 'l' : 'r';
-    const lateral = x0 > .65 || x1 < -.65;
-    if (x0 > -.75 && x0 < -.7 && x1 > .7 && x1 < .75 &&
-      y0 > .41 && y1 < .925 && z0 < -2.26 && z0 > -2.3 && z1 < -1.075 && z1 > -1.13) {
-      skins.set(id, 'hood');
-    } else if (lateral && y0 > .22 && y0 < .32 && y1 > .84 && y1 < 1.055) {
-      if (z0 > -.99 && z0 < -.87 && z1 > .15 && z1 < .27) skins.set(id, 'door-front-' + side);
-      else if (z0 > .17 && z0 < .29 && z1 > 1.15 && z1 < 1.34) skins.set(id, 'door-rear-' + side);
-    }
+  for (const [id, range] of bounds) {
+    const part = classify(range);
+    if (part) skins.set(id, part);
   }
   return i => skins.get(root(i));
 }
@@ -127,12 +176,14 @@ function prepareCar(source, texture, model) {
   source.updateMatrixWorld(true);
   const bounds = new T.Box3().setFromObject(source);
   const center = bounds.getCenter(new T.Vector3());
-  const scale = model.length / (bounds.max.x - bounds.min.x);
-  const transform = new T.Matrix4().makeRotationY(model.rotation)
+  const axis = model.rotation ? 'x' : 'z';
+  const scale = model.length / (bounds.max[axis] - bounds.min[axis]);
+  const transform = new T.Matrix4().makeRotationY(model.rotation || 0)
     .multiply(new T.Matrix4().makeScale(scale, scale, scale))
     .multiply(new T.Matrix4().makeTranslation(-center.x, -bounds.min.y, -center.z));
   const car = new T.Group();
   const projected = new Map();
+  let atlasParts;
   const paintMaterial = new T.MeshPhysicalMaterial({
     color: '#ffffff', map: texture, roughness: .3, metalness: .12,
     clearcoat: .48, clearcoatRoughness: .19, side: T.DoubleSide,
@@ -163,9 +214,11 @@ function prepareCar(source, texture, model) {
     }
     geometry.applyMatrix4(transform.clone().multiply(object.matrixWorld));
     const mappedPart = model.panels?.[object.name];
-    if (model.panels ? !mappedPart : !paintShells.has(object.material.name)) {
-      let material = model.panels ? object.material : materialFor(object.material.name, object.material);
-      if (model.panels && material.name === 'glass_body') {
+    const highlandPaint = model.frontProfile && paintShells.has(object.material.name);
+    const classify = highlandPaint ? highlandSkin : model.skin?.(object.name);
+    if (!mappedPart && !classify) {
+      let material = model.frontProfile ? materialFor(object.material.name, object.material) : object.material;
+      if (material.name === 'glass_body') {
         // Soften reflections on the simplified glass surface.
         modelYGlass ??= Object.assign(material.clone(), { roughness: .34, metalness: .28, envMapIntensity: .55 });
         material = modelYGlass;
@@ -176,7 +229,7 @@ function prepareCar(source, texture, model) {
     const position = geometry.getAttribute('position');
     const normal = geometry.getAttribute('normal');
     const index = geometry.getIndex();
-    const skinAt = mappedPart ? null : separateSkins(position, index);
+    const skinAt = classify ? separateSkins(position, index, classify) : null;
     for (let i = 0; i < (index?.count ?? position.count); i += 3) {
       const indices = [i, i + 1, i + 2].map(id => index ? index.getX(id) : id);
       const values = indices.map(id => [position.getX(id), position.getY(id), position.getZ(id)]);
@@ -185,7 +238,10 @@ function prepareCar(source, texture, model) {
       const axleDistance = Math.min(Math.abs(z + 1.48), Math.abs(z - 1.39));
       const wheel = object.material.name === 'Georimblurlfsub01Mtl' &&
         Math.abs(x) > .855 && Math.hypot(y - .345, axleDistance) < .275;
-      const part = mappedPart || (wheel ? null : skinAt(indices[0]) || exteriorPart(x, y, z, ny));
+      let part = mappedPart || (wheel ? null : skinAt?.(indices[0]) || (highlandPaint ? exteriorPart(x, y, z, ny) : null));
+      if (model.rearCorners && part === 'bumper-rear' && Math.abs(x) > .83 && y < .6 && z > 1.65 && z < 2.12) {
+        part = x < 0 ? 'corner-l' : 'corner-r';
+      }
       if (part) {
         paintParts.push(part);
         if (!projected.has(part)) projected.set(part, []);
@@ -219,13 +275,27 @@ function prepareCar(source, texture, model) {
   return {
     car,
     partAt(hit) {
-      return hit?.object === paint ? paintParts[hit.faceIndex] : null;
+      if (hit?.object !== paint) return null;
+      const part = paintParts[hit.faceIndex];
+      if (atlasParts?.has(part)) return part;
+      return part.startsWith('corner-') ? 'bumper-rear' : null;
     },
     mapAtlas(atlas) {
       const parts = new Map(atlas.parts.map(part => [part.id, part]));
-      for (const [id, entries] of projected) {
+      atlasParts = parts;
+      const mapped = new Map(projected);
+      // Juniper Performance splits the rear bumper tips into separate islands.
+      for (const id of ['corner-l', 'corner-r']) {
+        if (parts.has(id) || !mapped.has(id)) continue;
+        mapped.set('bumper-rear', [...mapped.get('bumper-rear'), ...mapped.get(id)]);
+        mapped.delete(id);
+      }
+      for (const [id, entries] of mapped) {
         const part = parts.get(id);
-        if (!part) continue;
+        if (!part) {
+          for (const { index } of entries) uv.setXY(index, 0, 0);
+          continue;
+        }
         let left = Infinity;
         let right = -Infinity;
         let top = Infinity;
@@ -246,7 +316,7 @@ function prepareCar(source, texture, model) {
         }
       }
       uv.needsUpdate = true;
-      return createSurfaceWrap(atlas, projected, paintPositions, uv, model.frontProfile);
+      return createSurfaceWrap(atlas, mapped, paintPositions, uv, model.frontProfile);
     },
   };
 }
