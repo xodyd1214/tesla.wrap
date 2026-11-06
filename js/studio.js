@@ -1,4 +1,5 @@
 import { loadTemplate, models, selectionBounds, surface } from './templates.js';
+import { withProjectStore } from './projects.js';
 
 const $ = id => document.getElementById(id);
 const atlasCanvas = $('atlas');
@@ -8,6 +9,12 @@ const flat = $('flat-preview');
 const partsGrid = $('parts');
 const modelInput = $('model');
 const transformTools = $('transform-tools');
+const showProjectsButton = $('show-projects');
+const projectDialog = $('projects');
+const projectControls = $('project-controls');
+const projectList = $('project-list');
+const projectName = $('project-name');
+const projectDate = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium' });
 const mobileLayout = matchMedia('(max-width: 640px)');
 const swatchColors = [
   ['흰색', '#ffffff'], ['검정', '#000000'], ['네이비', '#1f1d3d'],
@@ -80,11 +87,11 @@ function fitLayer(asset, parts, projection = null) {
   };
 }
 
-function snapshot() {
+function snapshot(design = session) {
   return {
-    colors: { ...session.colors },
-    layers: session.layers.map(layer => ({ ...layer, parts: [...layer.parts] })),
-    active: session.active,
+    colors: { ...design.colors },
+    layers: design.layers.map(layer => ({ ...layer, parts: [...layer.parts] })),
+    active: design.active,
   };
 }
 
@@ -288,6 +295,7 @@ function sync(dirty = true) {
   $('redo').disabled = !session.redo.length;
   $('reset').disabled = !Object.keys(session.colors).length && !session.layers.length;
   $('export').disabled = exporting;
+  $('save-project-button').disabled = false;
   for (const button of partsGrid.children) {
     const id = button.dataset.part;
     button.setAttribute('aria-pressed', session.selected.has(id));
@@ -366,6 +374,22 @@ function setFlat(message) {
   syncPlacement();
 }
 
+function loadViewer(modelId) {
+  let request = previewRequests.get(modelId);
+  if (!request) {
+    request = {};
+    request.promise = import('./vehicle.js').then(module => module.createViewer(vehicle, modelId)).then(ready => {
+      request.viewer = ready;
+      return ready;
+    }).catch(error => {
+      previewRequests.delete(modelId);
+      throw error;
+    });
+    previewRequests.set(modelId, request);
+  }
+  return request.promise;
+}
+
 async function showPreview(prepare = false) {
   if (!atlas) return;
   const current = session;
@@ -383,19 +407,7 @@ async function showPreview(prepare = false) {
   $('preview-badge').textContent = '3D';
   $('preview-message').hidden = !!viewer;
   try {
-    let request = previewRequests.get(modelId);
-    if (!request) {
-      request = {};
-      request.promise = import('./vehicle.js').then(module => module.createViewer(vehicle, modelId)).then(ready => {
-        request.viewer = ready;
-        return ready;
-      }).catch(error => {
-        previewRequests.delete(modelId);
-        throw error;
-      });
-      previewRequests.set(modelId, request);
-    }
-    const ready = await request.promise;
+    const ready = await loadViewer(modelId);
     if (session !== current || !atlas) return;
     viewer = ready;
     if (viewer.mount()) {
@@ -413,7 +425,7 @@ async function showPreview(prepare = false) {
   }
 }
 
-async function selectModel(model) {
+async function selectModel(model, saved = null) {
   const version = ++loadVersion;
   uploadVersion++;
   atlas = null;
@@ -441,7 +453,7 @@ async function selectModel(model) {
   $('active-image').hidden = true;
   transformTools.hidden = true;
   $('expand-parts').disabled = true;
-  for (const id of ['undo', 'redo', 'reset', 'export', 'upload', 'apply-color']) $(id).disabled = true;
+  for (const id of ['undo', 'redo', 'reset', 'export', 'upload', 'apply-color', 'save-project-button']) $(id).disabled = true;
   $('select-all').disabled = true;
   for (const button of document.querySelectorAll('.swatch')) button.disabled = true;
   atlasContext.clearRect(0, 0, atlasCanvas.width, atlasCanvas.height);
@@ -452,10 +464,14 @@ async function selectModel(model) {
 
   try {
     const existing = sessions.get(model.id);
-    const layout = existing?.atlas || await loadTemplate(model);
+    const layout = saved?.atlas || existing?.atlas || await loadTemplate(model);
     if (version !== loadVersion) return;
     atlas = layout;
-    if (!existing) {
+    if (saved) {
+      sessions.set(model.id, {
+        ...saved, model, undo: existing ? [snapshot(existing)] : [], redo: [],
+      });
+    } else if (!existing) {
       const initial = layout.parts.find(part => part.id === 'hood') || layout.parts[0];
       const firstVisit = sessions.size === 0 && model === models[0];
       const colors = firstVisit ? Object.fromEntries(layout.parts.map(part => [
@@ -565,6 +581,100 @@ function setZoom(value) {
 
 function blobFor(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PNG encoding failed')), 'image/png'));
+}
+
+async function saveProject(name) {
+  const design = snapshot();
+  const modelId = session.model.id;
+  const selected = [...session.selected];
+  const assets = [...new Set(design.layers.map(layer => layer.asset))];
+  const layers = design.layers.map(({ asset, ...layer }) => ({ ...layer, asset: assets.indexOf(asset) }));
+  const images = await Promise.all(assets.map(async asset => ({ name: asset.name, blob: await blobFor(asset.image) })));
+  const project = { ...design, layers, images, name, modelId, selected, savedAt: Date.now() };
+  const id = await withProjectStore('readwrite', store => store.add(project));
+  return { id, ...project };
+}
+
+async function openProject(id) {
+  const saved = await withProjectStore('readonly', store => store.get(id));
+  const model = models.find(candidate => candidate.id === saved?.modelId);
+  if (!model) throw new Error('Saved model unavailable');
+  if (saved.layers.some(layer => layer.projection)) {
+    try {
+      await loadViewer(model.preview);
+    } catch {
+      $('project-status').textContent = '이 작업의 이미지 배치를 열려면 3D 프리뷰를 불러와야 해요.';
+      return;
+    }
+  }
+  const layout = sessions.get(model.id)?.atlas || await loadTemplate(model);
+  const assets = await Promise.all(saved.images.map(async ({ name, blob }) => {
+    const bitmap = await createImageBitmap(blob);
+    try {
+      const { canvas, ctx } = surface(bitmap.width, bitmap.height);
+      ctx.drawImage(bitmap, 0, 0);
+      return { name, image: canvas };
+    } finally {
+      bitmap.close();
+    }
+  }));
+  if (!projectDialog.open) return;
+  modelInput.value = model.id;
+  await selectModel(model, {
+    atlas: layout, colors: saved.colors, selected: new Set(saved.selected), active: saved.active,
+    layers: saved.layers.map(layer => ({ ...layer, asset: assets[layer.asset] })),
+  });
+  projectDialog.close();
+  toast('‘' + saved.name + '’ 작업을 열었어요.');
+}
+
+async function runProjectAction(action, pending, failure) {
+  if (projectControls.disabled) return;
+  projectControls.disabled = true;
+  showProjectsButton.disabled = true;
+  $('project-status').textContent = pending;
+  try {
+    await action();
+  } catch (error) {
+    console.warn('Saved project operation failed', error);
+    $('project-status').textContent = failure;
+  } finally {
+    projectControls.disabled = false;
+    showProjectsButton.disabled = false;
+  }
+}
+
+function projectRow({ id, name, modelId, savedAt }) {
+  const row = document.createElement('li');
+  const details = document.createElement('div');
+  details.className = 'project-details';
+  const title = document.createElement('strong');
+  title.textContent = name;
+  const metadata = document.createElement('small');
+  const model = models.find(candidate => candidate.id === modelId);
+  metadata.textContent = [model?.name || modelId, model?.variant, projectDate.format(savedAt)].filter(Boolean).join(' · ');
+  details.append(title, metadata);
+  const open = document.createElement('button');
+  open.className = 'small-pill secondary';
+  open.type = 'button';
+  open.textContent = '열기';
+  open.setAttribute('aria-label', name + ' 열기');
+  open.addEventListener('click', () => void runProjectAction(() => openProject(id), '작업을 불러오는 중…', '작업을 열지 못했어요. 다시 시도해 주세요.'));
+  const remove = document.createElement('button');
+  remove.className = 'small-pill';
+  remove.type = 'button';
+  remove.textContent = '삭제';
+  remove.setAttribute('aria-label', name + ' 삭제');
+  remove.addEventListener('click', () => {
+    if (!confirm('‘' + name + '’ 작업을 삭제할까요?')) return;
+    void runProjectAction(async () => {
+      await withProjectStore('readwrite', store => store.delete(id));
+      row.remove();
+      $('project-status').textContent = '저장한 작업을 삭제했어요.';
+    }, '작업을 삭제하는 중…', '작업을 삭제하지 못했어요.');
+  });
+  row.append(details, open, remove);
+  return row;
 }
 
 async function exportPNG() {
@@ -819,13 +929,35 @@ $('reset').addEventListener('click', () => {
   toast('디자인을 초기화했어요.');
 });
 document.addEventListener('keydown', event => {
-  if (!atlas || $('guide').open || event.target.closest?.('input, select, textarea') ||
+  if (!atlas || $('guide').open || projectDialog.open || event.target.closest?.('input, select, textarea') ||
     !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return;
   event.preventDefault();
   if (event.shiftKey) restore('redo', 'undo');
   else restore('undo', 'redo');
 });
 $('export').addEventListener('click', () => void exportPNG());
+
+showProjectsButton.addEventListener('click', () => {
+  projectDialog.showModal();
+  void runProjectAction(async () => {
+    const saved = await withProjectStore('readonly', store => store.getAll());
+    saved.sort((a, b) => b.savedAt - a.savedAt || b.id - a.id);
+    projectList.replaceChildren(...saved.map(projectRow));
+    $('project-status').textContent = saved.length ? '' : '아직 저장한 작업이 없어요.';
+  }, '저장한 작업을 불러오는 중…', '브라우저 저장소를 열지 못했어요.');
+});
+$('close-projects').addEventListener('click', () => projectDialog.close());
+$('save-project').addEventListener('submit', event => {
+  event.preventDefault();
+  const name = projectName.value.trim();
+  if (!atlas || !name) return;
+  void runProjectAction(async () => {
+    const saved = await saveProject(name);
+    projectList.prepend(projectRow(saved));
+    projectName.value = '';
+    $('project-status').textContent = '이 브라우저에 작업을 저장했어요.';
+  }, '작업을 저장하는 중…', '작업을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.');
+});
 
 $('guide-toggle').addEventListener('click', () => {
   guide = !guide;

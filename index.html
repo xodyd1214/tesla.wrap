@@ -30,6 +30,7 @@
     <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 1-1 2.2m0 3h.01"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
   </svg>
 
   <header class="site-header">
@@ -46,6 +47,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <button class="guide-button" id="show-projects" type="button" aria-haspopup="dialog" aria-controls="projects"><svg class="icon"><use href="#i-folder"/></svg><span>내 작업</span></button>
         <button class="guide-button" type="button" data-guide><svg class="icon"><use href="#i-help"/></svg><span>사용 가이드</span></button>
         <button id="export" class="pill primary" type="button" disabled><svg class="icon"><use href="#i-download"/></svg><span>PNG 내보내기</span></button>
       </div>
@@ -162,6 +164,23 @@
       </span>
     </footer>
   </main>
+
+  <dialog id="projects" aria-labelledby="projects-heading" aria-describedby="projects-note">
+    <div class="dialog-heading">
+      <h2 id="projects-heading">내 작업</h2>
+      <button class="round" id="close-projects" type="button" aria-label="내 작업 닫기" autofocus><svg class="icon"><use href="#i-close"/></svg></button>
+    </div>
+    <p class="section-hint" id="projects-note">저장한 디자인은 지금 사용하는 브라우저에만 보관돼요.</p>
+    <fieldset id="project-controls">
+      <form id="save-project" class="project-form">
+        <label class="sr-only" for="project-name">작업 이름</label>
+        <input id="project-name" type="text" maxlength="60" placeholder="작업 이름" required>
+        <button id="save-project-button" class="pill primary" type="submit" disabled>새로 저장</button>
+      </form>
+      <ul id="project-list" class="project-list" aria-label="저장한 작업"></ul>
+    </fieldset>
+    <p id="project-status" class="section-hint" role="status"></p>
+  </dialog>
 
   <dialog id="guide">
     <div class="dialog-heading"><div><p class="mono kicker">QUICK GUIDE</p><h2>차량에 랩 적용하기</h2></div><button class="round" type="button" data-close aria-label="가이드 닫기"><svg class="icon"><use href="#i-close"/></svg></button></div>

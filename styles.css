@@ -341,6 +341,31 @@ dialog::backdrop { background: #17171773; }
 dialog ol { padding-left: 22px; }
 dialog li + li { margin-top: 9px; }
 .dialog-note { border-radius: 8px; background: var(--soft); padding: 10px 12px; margin: 12px 0; font-size: 13px; }
+#projects { width: 460px; }
+#project-controls { min-width: 0; margin: 0; padding: 0; border: 0; }
+.project-form { display: flex; align-items: center; gap: 8px; margin-block: 16px 10px; }
+.project-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--ink);
+}
+.project-list { max-height: min(42svh, 320px); margin: 0; padding: 0; overflow: auto; list-style: none; }
+.project-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding-block: 9px;
+  border-top: 1px solid var(--line);
+}
+.project-details { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.project-details small { display: block; color: var(--muted); }
+#project-status { min-height: 1.5em; margin-top: 8px; }
 #toast { position: fixed; z-index: 8; bottom: 18px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 28px); border-radius: 10px; color: white; background: var(--ink); padding: 10px 15px; font-size: 13px; text-align: center; }
 
 @media (max-width: 1200px) {
