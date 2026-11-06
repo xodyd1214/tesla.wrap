@@ -69,16 +69,20 @@
         <section class="pane preview-pane" aria-labelledby="preview-heading">
           <div class="pane-heading">
             <div class="pane-title"><h2 id="preview-heading">차량 프리뷰</h2><span id="preview-badge" class="pane-meta mono">3D</span></div>
-            <span class="live"><i></i> 실시간</span>
+            <div class="preview-actions">
+              <button id="place-image" class="round text-control" type="button" aria-pressed="false" hidden>차량에 배치</button>
+              <span class="live"><i></i> 실시간</span>
+            </div>
           </div>
           <div class="stage preview-stage" id="preview-stage">
-            <div id="vehicle" class="vehicle" aria-label="회전 가능한 3D 차량"></div>
+            <div id="vehicle" class="vehicle" tabindex="0" aria-label="회전 및 이미지 배치가 가능한 3D 차량"></div>
             <canvas id="flat-preview" aria-label="디자인 전개도 프리뷰" hidden></canvas>
             <div id="preview-message" class="stage-message" role="status">차량을 불러오는 중…</div>
           </div>
           <div class="pane-footer preview-footer">
             <div id="views" class="view-controls" aria-label="프리뷰 시점">
               <button class="small-pill" type="button" data-view="angle" aria-pressed="true">사선</button>
+              <button class="small-pill" type="button" data-view="front" aria-pressed="false">전면</button>
               <button class="small-pill" type="button" data-view="side" aria-pressed="false">측면</button>
               <button class="small-pill" type="button" data-view="top" aria-pressed="false">상단</button>
             </div>

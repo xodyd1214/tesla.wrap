@@ -1,9 +1,11 @@
 import { THREE as T, GLTFLoader, MeshoptDecoder, OrbitControls, RoomEnvironment } from '../assets/vendor/three-preview.js';
 import { surface } from './templates.js';
+import { createSurfaceWrap } from './surface-wrap.js';
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
 const views = {
   angle: [-5.2, 3.05, -5.9],
+  front: [0, 3.9, -7.3],
   side: [-8, 1.65, 0.001],
   top: [0, 9, 0.005],
 };
@@ -202,6 +204,7 @@ function prepareCar(source, texture) {
         }
       }
       uv.needsUpdate = true;
+      return createSurfaceWrap(atlas, projected, paintPositions, uv);
     },
   };
 }
@@ -261,6 +264,8 @@ export async function createViewer(container) {
 
     let frame = 0;
     let currentAtlas;
+    let surfaceWrap;
+    let placement;
     let lastTime;
     const request = () => { if (!frame) frame = requestAnimationFrame(draw); };
     function draw(time) {
@@ -308,7 +313,36 @@ export async function createViewer(container) {
       setAtlas(atlas) {
         if (currentAtlas === atlas) return;
         currentAtlas = atlas;
-        mapAtlas(atlas);
+        surfaceWrap = mapAtlas(atlas);
+      },
+      getProjection() {
+        camera.updateMatrixWorld();
+        const { elements } = camera.matrixWorld;
+        return {
+          right: elements.slice(0, 3),
+          down: elements.slice(4, 7).map(value => -value),
+          normal: elements.slice(8, 11),
+        };
+      },
+      fitProjection(asset, parts, projection) {
+        return surfaceWrap?.fit(asset, parts, projection);
+      },
+      drawSurfaceLayer(ctx, layer, part) {
+        surfaceWrap.draw(ctx, layer, part);
+      },
+      setPlacement(projection) {
+        if (placement === projection) return;
+        placement = projection;
+        controls.enabled = !placement;
+        if (!placement) return;
+        controls.autoRotate = false;
+        const distance = camera.position.distanceTo(controls.target);
+        camera.position.fromArray(placement.normal).multiplyScalar(distance).add(controls.target);
+        controls.update();
+        request();
+      },
+      dragScale() {
+        return (camera.right - camera.left) / (camera.zoom * container.clientWidth);
       },
       updateTexture(canvas) {
         art.ctx.fillStyle = '#ffffff';

@@ -3,6 +3,7 @@ import { loadTemplate, models, selectionBounds, surface } from './templates.js';
 const $ = id => document.getElementById(id);
 const atlasCanvas = $('atlas');
 const atlasContext = atlasCanvas.getContext('2d');
+const vehicle = $('vehicle');
 const flat = $('flat-preview');
 const partsGrid = $('parts');
 const modelInput = $('model');
@@ -30,6 +31,7 @@ let zoom = 1;
 let frame = 0;
 let textureDirty = false;
 let pointer;
+let placing = false;
 let sliderEdit;
 let exporting = false;
 let toastTimer;
@@ -62,13 +64,20 @@ function demoImage() {
   return { image: canvas, name: 'Silverline · 샘플' };
 }
 
-function fitLayer(asset, parts) {
+function fitLayer(asset, parts, projection = null) {
+  if (projection) {
+    const fit = viewer.fitProjection(asset, parts, projection);
+    if (fit) return {
+      asset, parts: parts.map(part => part.id),
+      ...fit, projection, scale: 100, rotation: 0,
+    };
+  }
   const bounds = selectionBounds(parts);
   const fit = Math.max(bounds.width / asset.image.width, bounds.height / asset.image.height);
   return {
     asset, parts: parts.map(part => part.id),
     x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2,
-    fit, scale: 100, rotation: 0,
+    fit, projection: null, scale: 100, rotation: 0,
   };
 }
 
@@ -171,6 +180,7 @@ function drawLayer(ctx, layer, dx = 0, dy = 0) {
 
 function renderTexture() {
   const { width, height, parts } = atlas;
+  if (viewer && session.model.preview) viewer.setAtlas(atlas);
   texture.ctx.clearRect(0, 0, width, height);
   const ctx = scratch.ctx;
   for (const part of parts) {
@@ -182,7 +192,8 @@ function renderTexture() {
     ctx.fillStyle = session.colors[part.id] || '#ffffff';
     ctx.fillRect(0, 0, part.width, part.height);
     const layer = getImageAt(part.id);
-    if (layer) drawLayer(ctx, layer, part.x, part.y);
+    if (layer?.projection) viewer.drawSurfaceLayer(ctx, layer, part);
+    else if (layer) drawLayer(ctx, layer, part.x, part.y);
     ctx.globalCompositeOperation = 'destination-in';
     ctx.drawImage(part.mask, 0, 0);
     ctx.restore();
@@ -224,7 +235,7 @@ function renderAtlas() {
   const parts = selectedParts();
   const layer = mode === 'image' && guide ? activeForSelection() : null;
   const o = overlay.ctx;
-  if (layer) {
+  if (layer && !layer.projection) {
     o.clearRect(0, 0, width, height);
     drawLayer(o, layer);
     o.globalCompositeOperation = 'destination-out';
@@ -295,9 +306,10 @@ function sync(dirty = true) {
   $('apply-color').disabled = !session.selected.size;
   const layer = activeImage();
   const editable = activeForSelection();
-  const canMove = !!editable && mode === 'image';
+  const canMove = !!editable && !editable.projection && mode === 'image';
   atlasCanvas.classList.toggle('movable', canMove);
-  $('atlas-hint').textContent = canMove ? '끌어서 이미지 이동' : '전개도에서 파츠 선택';
+  $('atlas-hint').textContent = editable?.projection && mode === 'image' ? '차량 프리뷰에서 이미지 이동' :
+    canMove ? '끌어서 이미지 이동' : '전개도에서 파츠 선택';
   $('active-image').hidden = !layer;
   transformTools.hidden = !layer || mode !== 'image';
   if (layer) {
@@ -317,7 +329,20 @@ function sync(dirty = true) {
     $('rotation').disabled = !editable;
     $('delete-image').disabled = !editable;
   }
+  syncPlacement();
   scheduleRender(dirty);
+}
+
+function syncPlacement() {
+  const button = $('place-image');
+  const layer = mode === 'image' ? activeForSelection() : null;
+  button.hidden = $('views').hidden || !layer;
+  const projection = !button.hidden && placing ? layer.projection : null;
+  button.setAttribute('aria-pressed', !!projection);
+  button.textContent = projection ? '배치 완료' : '차량에 배치';
+  vehicle.toggleAttribute('data-placing', !!projection);
+  viewer?.setPlacement(projection);
+  if (projection) $('orbit').setAttribute('aria-pressed', 'false');
 }
 
 function setMobile(view) {
@@ -341,16 +366,17 @@ function setFlat(message) {
   $('flat-note').hidden = false;
   $('preview-badge').textContent = '2D';
   $('preview-message').hidden = true;
+  syncPlacement();
 }
 
-async function showPreview() {
+async function showPreview(prepare = false) {
   if (!atlas) return;
   const current = session;
   if (!current.model.preview || viewerFailed) {
     setFlat(viewerFailed && current.model.preview ? '3D 연결이 어려워 전개도로 미리 보여 드려요.' : '이 차종은 전개도 프리뷰를 지원해요.');
     return;
   }
-  if (!viewer && $('preview-stage').clientWidth === 0) return;
+  if (!prepare && !viewer && $('preview-stage').clientWidth === 0) return;
   $('vehicle').hidden = false;
   flat.hidden = true;
   $('views').hidden = true;
@@ -359,7 +385,7 @@ async function showPreview() {
   $('preview-badge').textContent = '3D';
   $('preview-message').hidden = !!viewer;
   try {
-    viewerRequest ??= import('./vehicle.js').then(module => module.createViewer($('vehicle')));
+    viewerRequest ??= import('./vehicle.js').then(module => module.createViewer(vehicle));
     viewer = await viewerRequest;
     if (session !== current || !atlas) return;
     viewer.setAtlas(atlas);
@@ -367,6 +393,7 @@ async function showPreview() {
     $('preview-message').hidden = true;
     $('views').hidden = false;
     $('orbit').hidden = false;
+    syncPlacement();
   } catch (error) {
     console.warn('Vehicle preview unavailable', error);
     viewerFailed = true;
@@ -379,6 +406,7 @@ async function selectModel(model) {
   uploadVersion++;
   atlas = null;
   pointer = null;
+  placing = false;
   sliderEdit = null;
   atlasCanvas.classList.remove('dragging', 'movable');
   $('model-name').textContent = model.name;
@@ -390,6 +418,7 @@ async function selectModel(model) {
   $('vehicle').hidden = true;
   flat.hidden = true;
   $('views').hidden = true;
+  syncPlacement();
   $('orbit').hidden = true;
   $('flat-note').hidden = true;
   partsGrid.replaceChildren();
@@ -464,7 +493,7 @@ async function selectModel(model) {
   }
 }
 
-async function loadImage(file) {
+async function loadImage(file, onVehicle = false) {
   if (!file || !atlas || !session.selected.size) return;
   if (!/^image\/(png|jpeg|webp)$/i.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(file.name)) {
     toast('PNG, JPG, WebP 이미지를 선택해 주세요.');
@@ -483,10 +512,16 @@ async function loadImage(file) {
     const { canvas, ctx } = surface(Math.max(1, Math.round(decoded.naturalWidth * ratio)), Math.max(1, Math.round(decoded.naturalHeight * ratio)));
     ctx.drawImage(decoded, 0, 0, canvas.width, canvas.height);
     const asset = { image: canvas, name: file.name };
+    if (target.model.preview && (onVehicle || parts.length > 1) && $('views').hidden) await showPreview(true);
+    if (session !== target || version !== uploadVersion || !atlas) return;
+    const projection = target.model.preview && !viewerFailed && (onVehicle || parts.length > 1) ?
+      viewer?.getProjection() : null;
+    const layer = fitLayer(asset, parts, projection);
+    placing = !!layer.projection;
     setSelection(parts.map(part => part.id));
-    transact(() => replaceSelectedWith(fitLayer(asset, parts)));
+    transact(() => replaceSelectedWith(layer));
     if (mobileLayout.matches) {
-      setMobile('atlas');
+      setMobile(placing ? 'preview' : 'atlas');
       $('workspace').scrollIntoView({ block: 'start' });
     }
     toast(parts.length + '개 파츠에 이미지를 적용했어요.');
@@ -604,7 +639,7 @@ $('file').addEventListener('change', event => {
   void loadImage(event.target.files[0]);
   event.target.value = '';
 });
-for (const target of [$('upload'), $('atlas-stage')]) {
+for (const target of [$('upload'), $('atlas-stage'), vehicle]) {
   target.addEventListener('dragover', event => {
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
@@ -615,7 +650,7 @@ for (const target of [$('upload'), $('atlas-stage')]) {
     event.preventDefault();
     $('upload').classList.remove('dragging');
     if (atlas && !session.selected.size) toast('이미지를 넣을 파츠를 먼저 선택해 주세요.');
-    else void loadImage(event.dataTransfer.files[0]);
+    else void loadImage(event.dataTransfer.files[0], target === vehicle);
   });
 }
 
@@ -632,12 +667,32 @@ $('delete-image').addEventListener('click', () => {
 $('fit-image').addEventListener('click', () => {
   const layer = activeForSelection();
   if (!layer) return;
-  transact(() => Object.assign(layer, fitLayer(layer.asset, selectedParts())));
+  transact(() => Object.assign(layer, fitLayer(layer.asset, selectedParts(), layer.projection)));
 });
 $('apply-image').addEventListener('click', () => {
   const layer = activeImage();
   if (!layer || !session.selected.size) return;
-  transact(() => replaceSelectedWith(fitLayer(layer.asset, selectedParts())));
+  const parts = selectedParts();
+  const projection = layer.projection || (parts.length > 1 && !$('views').hidden ? viewer.getProjection() : null);
+  const replacement = fitLayer(layer.asset, parts, projection);
+  placing = !!replacement.projection;
+  transact(() => replaceSelectedWith(replacement));
+  if (placing && mobileLayout.matches) setMobile('preview');
+});
+
+$('place-image').addEventListener('click', () => {
+  const layer = activeForSelection();
+  if (!layer || !viewer) return;
+  if (layer.projection) {
+    placing = !placing;
+    syncPlacement();
+    return;
+  }
+  const parts = atlas.parts.filter(part => layer.parts.includes(part.id));
+  const projected = fitLayer(layer.asset, parts, viewer.getProjection());
+  if (!projected.projection) return;
+  placing = true;
+  transact(() => Object.assign(layer, projected, { scale: layer.scale, rotation: layer.rotation }));
 });
 
 for (const id of ['scale', 'rotation']) {
@@ -659,12 +714,13 @@ for (const id of ['scale', 'rotation']) {
 
 atlasCanvas.addEventListener('pointerdown', event => {
   if (!atlas || event.button !== 0 || pointer) return;
-  const layer = mode === 'image' ? activeForSelection() : null;
-  pointer = { id: event.pointerId, start: point(event), layer, x: layer?.x, y: layer?.y, before: null };
+  const active = mode === 'image' ? activeForSelection() : null;
+  const layer = active?.projection ? null : active;
+  pointer = { source: atlasCanvas, id: event.pointerId, start: point(event), layer, x: layer?.x, y: layer?.y, before: null };
   atlasCanvas.setPointerCapture(event.pointerId);
 });
 atlasCanvas.addEventListener('pointermove', event => {
-  if (!atlas || pointer?.id !== event.pointerId || !pointer.layer) return;
+  if (!atlas || pointer?.source !== atlasCanvas || pointer.id !== event.pointerId || !pointer.layer) return;
   const here = point(event);
   const dx = here.x - pointer.start.x;
   const dy = here.y - pointer.start.y;
@@ -675,12 +731,33 @@ atlasCanvas.addEventListener('pointermove', event => {
   atlasCanvas.classList.add('dragging');
   scheduleRender();
 });
+
+vehicle.addEventListener('pointerdown', event => {
+  if (!atlas || event.button !== 0 || pointer || !vehicle.hasAttribute('data-placing')) return;
+  const layer = activeForSelection();
+  pointer = {
+    source: vehicle, id: event.pointerId, start: { x: event.clientX, y: event.clientY },
+    layer, x: layer.x, y: layer.y, scale: viewer.dragScale(), before: null,
+  };
+  vehicle.setPointerCapture(event.pointerId);
+});
+vehicle.addEventListener('pointermove', event => {
+  if (!atlas || pointer?.source !== vehicle || pointer.id !== event.pointerId) return;
+  const dx = event.clientX - pointer.start.x;
+  const dy = event.clientY - pointer.start.y;
+  if (!pointer.before && Math.hypot(dx, dy) < 4) return;
+  pointer.before ??= snapshot();
+  pointer.layer.x = pointer.x + dx * pointer.scale;
+  pointer.layer.y = pointer.y + dy * pointer.scale;
+  scheduleRender();
+});
+
 function endPointer(event) {
-  if (!atlas || pointer?.id !== event.pointerId) return;
+  if (!atlas || pointer?.source !== event.currentTarget || pointer.id !== event.pointerId) return;
   if (pointer.before) {
     saveUndo(pointer.before);
     sync(false);
-  } else if (event.type === 'pointerup') {
+  } else if (event.type === 'pointerup' && pointer.source === atlasCanvas) {
     const x = Math.floor(pointer.start.x);
     const y = Math.floor(pointer.start.y);
     const id = x >= 0 && x < atlas.width && y >= 0 && y < atlas.height ?
@@ -690,18 +767,22 @@ function endPointer(event) {
   pointer = null;
   atlasCanvas.classList.remove('dragging');
 }
-for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) atlasCanvas.addEventListener(event, endPointer);
-atlasCanvas.addEventListener('keydown', event => {
+for (const target of [atlasCanvas, vehicle]) {
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) target.addEventListener(event, endPointer);
+  target.addEventListener('keydown', nudgeImage);
+}
+function nudgeImage(event) {
   const direction = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[event.key];
   const layer = activeForSelection();
   if (!atlas || !direction || !layer || mode !== 'image') return;
+  if (layer.projection ? !event.currentTarget.hasAttribute('data-placing') : event.currentTarget !== atlasCanvas) return;
   event.preventDefault();
-  const step = event.shiftKey ? 20 : 4;
+  const step = (event.shiftKey ? 20 : 4) * (layer.projection ? viewer.dragScale() : 1);
   transact(() => {
     layer.x += direction[0] * step;
     layer.y += direction[1] * step;
   });
-});
+}
 
 $('undo').addEventListener('click', () => restore('undo', 'redo'));
 $('redo').addEventListener('click', () => restore('redo', 'undo'));
@@ -743,6 +824,8 @@ mobileLayout.addEventListener('change', () => {
 for (const button of document.querySelectorAll('[data-view]')) {
   button.addEventListener('click', () => {
     if (!viewer) return;
+    placing = false;
+    syncPlacement();
     viewer.setOrbit(false);
     $('orbit').setAttribute('aria-pressed', 'false');
     viewer.setView(button.dataset.view);
@@ -751,6 +834,8 @@ for (const button of document.querySelectorAll('[data-view]')) {
 }
 $('orbit').addEventListener('click', () => {
   if (!viewer) return;
+  placing = false;
+  syncPlacement();
   const enabled = $('orbit').getAttribute('aria-pressed') !== 'true';
   viewer.setOrbit(enabled);
   $('orbit').setAttribute('aria-pressed', enabled);
