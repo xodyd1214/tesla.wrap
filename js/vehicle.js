@@ -1,6 +1,6 @@
 import { THREE as T, GLTFLoader, MeshoptDecoder, OrbitControls, RoomEnvironment } from '../assets/vendor/three-preview.js';
 import { surface } from './templates.js';
-import { createSurfaceWrap, frontDistance } from './surface-wrap.js';
+import { createFrontProfile, createSurfaceWrap, frontDistance } from './surface-wrap.js';
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
 // Named body islands in the credited 2021 Model Y mesh.
@@ -17,13 +17,23 @@ const modelYPanels = {
 const legacyModel3Panels = {
   Object_246: 'trunk', Object_336: 'door-rear-l', Object_394: 'door-rear-r',
   Object_428: 'bumper-front', Object_435: 'bumper-rear', Object_445: 'hood',
-  Charge_Cap_GLOBAL001: 'fender-rear-l',
 };
+// Centerlines are sampled from each mesh, from the windshield down to the bumper lip.
 const previewModels = {
-  highland: { file: 'model.glb', length: 4.72, rotation: Math.PI / 2, frontProfile: true },
+  highland: {
+    file: 'model.glb', length: 4.72, rotation: Math.PI / 2, highland: true,
+    frontProfile: createFrontProfile([[-1.1, .9], [-1.75, .805], [-2.2, .666], [-2.285, .613], [-2.35, .55], [-2.35, .2]]),
+  },
   'model-y': { file: 'model-y.glb', length: 4.75, rotation: -Math.PI / 2, panels: modelYPanels },
-  'model-3': { file: 'model-3.glb', length: 4.69, panels: legacyModel3Panels, skin: legacyModel3Skin },
-  juniper: { file: 'juniper.glb', length: 4.794, skin: juniperSkin, rearCorners: true },
+  'model-3': {
+    file: 'model-3.glb', length: 4.69, panels: legacyModel3Panels, skin: legacyModel3Skin,
+    hiddenMesh: 'Charge_Cap_GLOBAL001',
+    frontProfile: createFrontProfile([[-1.38, .88], [-1.85, .81], [-2.1, .72], [-2.25, .64], [-2.34, .55], [-2.34, .16]]),
+  },
+  juniper: {
+    file: 'juniper.glb', length: 4.794, skin: juniperSkin, rearCorners: true,
+    frontProfile: createFrontProfile([[-1.24, 1.14], [-1.8, .98], [-2.15, .855], [-2.3, .778], [-2.36, .67], [-2.395, .3], [-2.33, .25]]),
+  },
 };
 const views = {
   angle: [-5.2, 3.05, -5.9],
@@ -198,7 +208,8 @@ function prepareCar(source, texture, model) {
   let modelYGlass;
 
   source.traverse(object => {
-    if (!object.isMesh) return;
+    // The legacy asset's separate charge flap protrudes from the closed body.
+    if (!object.isMesh || object.name === model.hiddenMesh) return;
     const geometry = object.geometry.clone();
     // Bake scene transforms into floats so quantized GLB attributes keep their range.
     for (const name of ['position', 'normal']) {
@@ -214,10 +225,10 @@ function prepareCar(source, texture, model) {
     }
     geometry.applyMatrix4(transform.clone().multiply(object.matrixWorld));
     const mappedPart = model.panels?.[object.name];
-    const highlandPaint = model.frontProfile && paintShells.has(object.material.name);
+    const highlandPaint = model.highland && paintShells.has(object.material.name);
     const classify = highlandPaint ? highlandSkin : model.skin?.(object.name);
     if (!mappedPart && !classify) {
-      let material = model.frontProfile ? materialFor(object.material.name, object.material) : object.material;
+      let material = model.highland ? materialFor(object.material.name, object.material) : object.material;
       if (material.name === 'glass_body') {
         // Soften reflections on the simplified glass surface.
         modelYGlass ??= Object.assign(material.clone(), { roughness: .34, metalness: .28, envMapIntensity: .55 });
@@ -378,6 +389,7 @@ export async function createViewer(container, modelId) {
 
     let frame = 0;
     let currentAtlas;
+    let currentView;
     let surfaceWrap;
     let placement;
     let lastTime;
@@ -396,7 +408,8 @@ export async function createViewer(container, modelId) {
       const height = container.clientHeight;
       if (!width || !height) return;
       const aspect = width / height;
-      const half = Math.max(2.68, 2.39 * aspect);
+      const verticalHalf = currentView === 'top' ? model.length / 2 + .22 : 2.39;
+      const half = Math.max(2.68, verticalHalf * aspect);
       camera.left = -half;
       camera.right = half;
       camera.top = half / aspect;
@@ -406,11 +419,12 @@ export async function createViewer(container, modelId) {
       request();
     }
     function setView(view) {
+      currentView = view;
       camera.position.set(...views[view]);
       camera.zoom = 1;
       camera.updateProjectionMatrix();
       controls.update();
-      request();
+      resize();
     }
     controls.addEventListener('change', request);
     new ResizeObserver(resize).observe(container);
@@ -435,8 +449,7 @@ export async function createViewer(container, modelId) {
         if (switched) {
           container.replaceChildren(renderer.domElement);
           setView('angle');
-        }
-        resize();
+        } else resize();
         return switched;
       },
       setView,
@@ -489,11 +502,11 @@ export async function createViewer(container, modelId) {
         const down = new T.Vector3().fromArray(view.down).multiplyScalar(scale);
         if (projection.front) {
           const { x, y, z } = point ?? { x: 0, y: .68, z: -2.15 };
-          const v = frontDistance(x, y, z);
+          const v = frontDistance(projection.front, x, y, z);
           return {
             xx: -right.x, xy: -down.x,
-            yx: frontDistance(x + right.x, y + right.y, z + right.z) - v,
-            yy: frontDistance(x + down.x, y + down.y, z + down.z) - v,
+            yx: frontDistance(projection.front, x + right.x, y + right.y, z + right.z) - v,
+            yy: frontDistance(projection.front, x + down.x, y + down.y, z + down.z) - v,
           };
         }
         const u = new T.Vector3().fromArray(projection.right);

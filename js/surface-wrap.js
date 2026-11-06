@@ -5,29 +5,27 @@ function dot(axis, x, y, z) {
 }
 
 const frontParts = new Set(['hood', 'bumper-front', 'fender-front-l', 'fender-front-r']);
-// Highland's centerline in model coordinates, from the windshield to the bumper lip.
-const frontProfile = [
-  [-1.1, .9], [-1.75, .805], [-2.2, .666], [-2.285, .613], [-2.35, .55], [-2.35, .2],
-];
-let frontLength = 0;
-const frontSegments = frontProfile.slice(1).map(([endZ, endY], i) => {
-  const [z, y] = frontProfile[i];
-  const dz = endZ - z;
-  const dy = endY - y;
-  const length = Math.hypot(dz, dy);
-  const start = frontLength;
-  frontLength += length;
-  return { z, y, dz: dz / length, dy: dy / length, start, length };
-});
+export function createFrontProfile(points) {
+  let distance = 0;
+  return points.slice(1).map(([endZ, endY], i) => {
+    const [z, y] = points[i];
+    const dz = endZ - z;
+    const dy = endY - y;
+    const length = Math.hypot(dz, dy);
+    const start = distance;
+    distance += length;
+    return { z, y, dz: dz / length, dy: dy / length, start, length };
+  });
+}
 
-export function frontDistance(x, y, z) {
+export function frontDistance(profile, x, y, z) {
   // The nose curves back around the sides. Compare it with the centerline
   // after accounting for that sweep near the bumper.
   const sweep = Math.max(0, Math.min(1, (-z - 1.5) / .5));
   const centerZ = z - .36 * x * x * sweep;
   let distance = 0;
   let closest = Infinity;
-  for (const segment of frontSegments) {
+  for (const segment of profile) {
     const dz = centerZ - segment.z;
     const dy = y - segment.y;
     const along = Math.max(0, Math.min(segment.length, dz * segment.dz + dy * segment.dy));
@@ -111,7 +109,7 @@ function surfacePositions(atlas, part, entries, positions, uv) {
   return { points, pixels: queue.subarray(0, end) };
 }
 
-export function createSurfaceWrap(atlas, parts, positions, uv, useFrontProfile) {
+export function createSurfaceWrap(atlas, parts, positions, uv, frontProfile) {
   const maps = new Map();
   const images = new WeakMap();
   const stamp = surface(atlas.width, atlas.height);
@@ -119,15 +117,16 @@ export function createSurfaceWrap(atlas, parts, positions, uv, useFrontProfile) 
   return {
     fit(asset, selection, projection) {
       if (!selection.length || !selection.every(part => parts.has(part.id))) return null;
-      const front = useFrontProfile && selection.every(part => frontParts.has(part.id)) &&
+      const followsFront = frontProfile && selection.every(part => frontParts.has(part.id)) &&
         selection.some(part => part.id === 'hood') && selection.some(part => part.id === 'bumper-front');
+      const front = followsFront ? frontProfile : null;
       const { right, down } = projection;
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
       for (const part of selection) {
         for (const { index } of parts.get(part.id)) {
           const x = positions[index * 3], y = positions[index * 3 + 1], z = positions[index * 3 + 2];
           const u = front ? -x : dot(right, x, y, z);
-          const v = front ? frontDistance(x, y, z) : dot(down, x, y, z);
+          const v = front ? frontDistance(front, x, y, z) : dot(down, x, y, z);
           x0 = Math.min(x0, u);
           x1 = Math.max(x1, u);
           y0 = Math.min(y0, v);
@@ -138,7 +137,7 @@ export function createSurfaceWrap(atlas, parts, positions, uv, useFrontProfile) 
       return {
         x: (x0 + x1) / 2, y: (y0 + y1) / 2,
         fit: Math.max((x1 - x0) / width, (y1 - y0) / height),
-        projection: front === !!projection.front ? projection : { ...projection, front },
+        projection: front === (projection.front ?? null) ? projection : { ...projection, front },
       };
     },
     draw(ctx, layer, part) {
@@ -157,7 +156,7 @@ export function createSurfaceWrap(atlas, parts, positions, uv, useFrontProfile) 
         map.frontRows = new Float32Array(output.width * output.height);
         for (const pixel of pixels) {
           const offset = pixel * 3;
-          map.frontRows[pixel] = frontDistance(points[offset], points[offset + 1], points[offset + 2]);
+          map.frontRows[pixel] = frontDistance(front, points[offset], points[offset + 1], points[offset + 2]);
         }
       }
       const factor = layer.fit * layer.scale / 100;
