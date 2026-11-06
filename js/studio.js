@@ -46,11 +46,11 @@ const clamp = (n, low, high) => Math.min(high, Math.max(low, n));
 
 function demoImage() {
   const { canvas, ctx } = surface(960, 780);
-  ctx.fillStyle = '#27322d';
+  ctx.fillStyle = '#242424';
   ctx.fillRect(0, 0, 960, 780);
   const lines = [
-    [-72, 90, '#3c4d43'], [-16, 8, '#8a9a88'], [5, 3, '#dce5d5'],
-    [28, 23, '#adbda2'], [54, 4, '#d7ebac'], [76, 9, '#687f6d'],
+    [-72, 90, '#424242'], [-16, 8, '#898989'], [5, 3, '#e8e8e8'],
+    [28, 23, '#b9b9b9'], [54, 4, '#dedede'], [76, 9, '#707070'],
   ];
   for (const [offset, width, color] of lines) {
     ctx.strokeStyle = color;
@@ -214,14 +214,14 @@ function selectionOverlay(part) {
   const { canvas, ctx } = surface(part.width + 6, part.height + 6);
   for (const [x, y] of [[0, 3], [6, 3], [3, 0], [3, 6]]) ctx.drawImage(part.mask, x, y);
   ctx.globalCompositeOperation = 'source-in';
-  ctx.fillStyle = '#365a34';
+  ctx.fillStyle = '#343434';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.globalCompositeOperation = 'destination-out';
   ctx.drawImage(part.mask, 3, 3);
   const tint = surface(part.width, part.height);
   tint.ctx.drawImage(part.mask, 0, 0);
   tint.ctx.globalCompositeOperation = 'source-in';
-  tint.ctx.fillStyle = 'rgba(164, 194, 139, .29)';
+  tint.ctx.fillStyle = 'rgba(112, 112, 112, .18)';
   tint.ctx.fillRect(0, 0, part.width, part.height);
   part.selection = { outline: canvas, tint: tint.canvas };
   return part.selection;
@@ -232,7 +232,7 @@ function renderAtlas() {
   const ctx = atlasContext;
   ctx.clearRect(0, 0, width, height);
   ctx.save();
-  ctx.shadowColor = 'rgba(38, 42, 50, .27)';
+  ctx.shadowColor = 'rgba(32, 32, 32, .24)';
   ctx.shadowBlur = 3;
   ctx.drawImage(texture.canvas, 0, 0);
   ctx.restore();
@@ -291,7 +291,7 @@ function sync(dirty = true) {
   for (const button of partsGrid.children) {
     const id = button.dataset.part;
     button.setAttribute('aria-pressed', session.selected.has(id));
-    button.style.setProperty('--dot', getImageAt(id) ? '#adc79b' : session.colors[id] || '#fff');
+    button.style.setProperty('--dot', getImageAt(id) ? '#6c6c6c' : session.colors[id] || '#fff');
   }
   $('select-all').disabled = !atlas.parts.length;
   $('select-all').setAttribute('aria-pressed', atlas.parts.length > 0 && atlas.parts.every(part => session.selected.has(part.id)));
@@ -460,7 +460,7 @@ async function selectModel(model) {
       const firstVisit = sessions.size === 0 && model === models[0];
       const colors = firstVisit ? Object.fromEntries(layout.parts.map(part => [
         part.id,
-        part.id.startsWith('mirror-') ? '#78817b' : '#cbd1cc',
+        part.id.startsWith('mirror-') ? '#808080' : '#d5d5d5',
       ])) : {};
       const layers = firstVisit ? [fitLayer(demoImage(), [initial])] : [];
       sessions.set(model.id, {

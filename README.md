@@ -30,4 +30,4 @@ python3 -m http.server 8042 --bind 127.0.0.1
 
 - 차종별 전개도와 차량 적용 규격은 [Tesla custom-wraps](https://github.com/teslamotors/custom-wraps/tree/86c7d31454caf0f20af6f6af105f577643f13bce)를 사용합니다.
 - 3D 메시 출처와 라이선스는 [모델 크레딧](assets/models/CREDITS.md)에 있습니다. 렌더링은 [Three.js](https://github.com/mrdoob/three.js)를 사용합니다.
-- 편집 화면은 밝은 바탕에 녹색을 강조색으로 사용합니다. 서체는 [Pretendard](https://github.com/orioncactus/pretendard)와 JetBrains Mono를 사용합니다.
+- 편집 화면은 흰 바탕에 실버와 차콜을 사용합니다. 서체는 [Pretendard](https://github.com/orioncactus/pretendard)와 JetBrains Mono를 사용합니다.

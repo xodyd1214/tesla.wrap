@@ -389,9 +389,9 @@ export async function createViewer(container, modelId) {
 
     const pattern = surface(128, 128);
     const shadow = pattern.ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
-    shadow.addColorStop(0, 'rgba(24,28,36,.54)');
-    shadow.addColorStop(.65, 'rgba(24,28,36,.29)');
-    shadow.addColorStop(1, 'rgba(24,28,36,0)');
+    shadow.addColorStop(0, 'rgba(28,28,28,.48)');
+    shadow.addColorStop(.65, 'rgba(28,28,28,.22)');
+    shadow.addColorStop(1, 'rgba(28,28,28,0)');
     pattern.ctx.fillStyle = shadow;
     pattern.ctx.fillRect(0, 0, 128, 128);
     const floor = new T.Mesh(
