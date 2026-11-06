@@ -738,22 +738,29 @@ atlasCanvas.addEventListener('pointermove', event => {
 });
 
 vehicle.addEventListener('pointerdown', event => {
-  if (!atlas || event.button !== 0 || pointer || !vehicle.hasAttribute('data-placing')) return;
+  if (!atlas || event.button !== 0 || pointer || mode !== 'image' || $('views').hidden) return;
   const layer = activeForSelection();
+  if (!layer?.projection) return;
+  if (!vehicle.hasAttribute('data-placing') && !layer.parts.includes(viewer.hitPart(event.clientX, event.clientY))) return;
+  // Claim this drag before OrbitControls receives the same pointer.
+  event.stopPropagation();
+  viewer.setOrbit(false);
+  $('orbit').setAttribute('aria-pressed', 'false');
   pointer = {
     source: vehicle, id: event.pointerId, start: { x: event.clientX, y: event.clientY },
-    layer, x: layer.x, y: layer.y, scale: viewer.dragScale(), before: null,
+    layer, x: layer.x, y: layer.y, axes: viewer.dragAxes(layer.projection), before: null,
   };
   vehicle.setPointerCapture(event.pointerId);
-});
+}, true);
 vehicle.addEventListener('pointermove', event => {
   if (!atlas || pointer?.source !== vehicle || pointer.id !== event.pointerId) return;
   const dx = event.clientX - pointer.start.x;
   const dy = event.clientY - pointer.start.y;
   if (!pointer.before && Math.hypot(dx, dy) < 4) return;
   pointer.before ??= snapshot();
-  pointer.layer.x = pointer.x + dx * pointer.scale;
-  pointer.layer.y = pointer.y + dy * pointer.scale;
+  const { xx, xy, yx, yy } = pointer.axes;
+  pointer.layer.x = pointer.x + dx * xx + dy * xy;
+  pointer.layer.y = pointer.y + dx * yx + dy * yy;
   scheduleRender();
 });
 

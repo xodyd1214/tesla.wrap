@@ -123,6 +123,7 @@ function prepareCar(source, texture) {
     clearcoat: .48, clearcoatRoughness: .19, side: T.DoubleSide,
   });
   const paintGeometry = new T.BufferGeometry();
+  const paintParts = [];
   const paintPositions = [];
   const paintNormals = [];
   const trimMaterial = new T.MeshStandardMaterial({ color: '#25252a', roughness: .48, side: T.DoubleSide });
@@ -150,6 +151,7 @@ function prepareCar(source, texture) {
         Math.abs(x) > .855 && Math.hypot(y - .345, axleDistance) < .275;
       const part = wheel ? null : skinAt(indices[0]) || exteriorPart(x, y, z, ny);
       if (part) {
+        paintParts.push(part);
         if (!projected.has(part)) projected.set(part, []);
         const entries = projected.get(part);
         for (const [j, id] of indices.entries()) {
@@ -171,7 +173,8 @@ function prepareCar(source, texture) {
   paintGeometry.setAttribute('normal', new T.Float32BufferAttribute(paintNormals, 3));
   const uv = new T.Float32BufferAttribute(new Float32Array(paintPositions.length / 3 * 2), 2);
   paintGeometry.setAttribute('uv', uv);
-  car.add(new T.Mesh(paintGeometry, paintMaterial));
+  const paint = new T.Mesh(paintGeometry, paintMaterial);
+  car.add(paint);
   const trimGeometry = new T.BufferGeometry();
   trimGeometry.setAttribute('position', new T.Float32BufferAttribute(trimPositions, 3));
   trimGeometry.setAttribute('normal', new T.Float32BufferAttribute(trimNormals, 3));
@@ -179,6 +182,9 @@ function prepareCar(source, texture) {
 
   return {
     car,
+    partAt(hit) {
+      return hit?.object === paint ? paintParts[hit.faceIndex] : null;
+    },
     mapAtlas(atlas) {
       const parts = new Map(atlas.parts.map(part => [part.id, part]));
       for (const [id, entries] of projected) {
@@ -259,7 +265,8 @@ export async function createViewer(container) {
     const texture = new T.CanvasTexture(art.canvas);
     texture.colorSpace = T.SRGBColorSpace;
     texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-    const { car, mapAtlas } = prepareCar(source, texture);
+    const { car, mapAtlas, partAt } = prepareCar(source, texture);
+    const ray = new T.Raycaster();
     scene.add(car);
 
     let frame = 0;
@@ -303,6 +310,20 @@ export async function createViewer(container) {
     setView('angle');
     resize();
 
+    function getProjection() {
+      camera.updateMatrixWorld();
+      const { elements } = camera.matrixWorld;
+      return {
+        right: elements.slice(0, 3),
+        down: elements.slice(4, 7).map(value => -value),
+        normal: elements.slice(8, 11),
+      };
+    }
+
+    function dragScale() {
+      return (camera.right - camera.left) / (camera.zoom * container.clientWidth);
+    }
+
     return {
       setView,
       setOrbit(enabled) {
@@ -315,14 +336,15 @@ export async function createViewer(container) {
         currentAtlas = atlas;
         surfaceWrap = mapAtlas(atlas);
       },
-      getProjection() {
+      getProjection,
+      hitPart(clientX, clientY) {
+        const rect = renderer.domElement.getBoundingClientRect();
         camera.updateMatrixWorld();
-        const { elements } = camera.matrixWorld;
-        return {
-          right: elements.slice(0, 3),
-          down: elements.slice(4, 7).map(value => -value),
-          normal: elements.slice(8, 11),
-        };
+        ray.setFromCamera(new T.Vector2(
+          2 * (clientX - rect.left) / rect.width - 1,
+          1 - 2 * (clientY - rect.top) / rect.height,
+        ), camera);
+        return partAt(ray.intersectObject(car)[0]);
       },
       fitProjection(asset, parts, projection) {
         return surfaceWrap?.fit(asset, parts, projection);
@@ -341,8 +363,15 @@ export async function createViewer(container) {
         controls.update();
         request();
       },
-      dragScale() {
-        return (camera.right - camera.left) / (camera.zoom * container.clientWidth);
+      dragScale,
+      dragAxes(projection) {
+        const view = getProjection();
+        const scale = dragScale();
+        const right = new T.Vector3().fromArray(view.right).multiplyScalar(scale);
+        const down = new T.Vector3().fromArray(view.down).multiplyScalar(scale);
+        const u = new T.Vector3().fromArray(projection.right);
+        const v = new T.Vector3().fromArray(projection.down);
+        return { xx: right.dot(u), xy: down.dot(u), yx: right.dot(v), yy: down.dot(v) };
       },
       updateTexture(canvas) {
         art.ctx.fillStyle = '#ffffff';
