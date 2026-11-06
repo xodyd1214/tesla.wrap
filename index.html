@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f8f8f5">
+  <meta name="theme-color" content="#fafaf9">
   <meta name="description" content="Tesla 공식 전개도로 디지털 랩을 만들고, 차량 위에서 미리 확인하세요.">
   <title>Wrap Studio — 테슬라 디지털 랩 편집기</title>
   <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
@@ -14,6 +14,7 @@
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></symbol>
     <symbol id="i-up-right" viewBox="0 0 24 24"><path d="M6 18 18 6M8 6h10v10"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
     <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m-5 5 5-5 5 5M5 16v4h14v-4"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
     <symbol id="i-car" viewBox="0 0 24 24"><path d="m4 10 2-5h12l2 5M3 10h18v8H3zM6 18v2m12-2v2M6 14h2m8 0h2"/></symbol>
@@ -34,34 +35,43 @@
 
   <header class="site-header">
     <div class="shell header-inner">
-      <a class="brand" href="./" aria-label="Wrap Studio 홈"><img src="./assets/mark.svg" alt="" width="32" height="32"> Wrap Studio</a>
+      <a class="brand" href="#preview" aria-label="Wrap Studio 홈"><img src="./assets/mark.svg" alt="" width="32" height="32"> Wrap Studio</a>
+      <nav class="studio-nav" aria-label="스튜디오 화면">
+        <a href="#preview" data-screen-link="preview" aria-current="page">프리뷰</a>
+        <a href="#editor" data-screen-link="editor">랩 편집</a>
+      </nav>
       <div class="header-actions">
         <button class="guide-button" type="button" data-guide><svg class="icon"><use href="#i-help"/></svg><span>사용 가이드</span></button>
-        <button id="export" class="pill primary" type="button" disabled><svg class="icon"><use href="#i-download"/></svg> PNG 내보내기</button>
+        <button id="export" class="pill primary" type="button" disabled><svg class="icon"><use href="#i-download"/></svg><span>PNG 내보내기</span></button>
       </div>
     </div>
   </header>
 
   <main class="shell">
-    <section class="studio" aria-labelledby="page-title">
-      <div class="studio-bar">
-        <div class="workspace-title">
-          <p class="kicker mono">TESLA PAINT SHOP</p>
-          <h1 id="page-title">랩 디자인</h1>
-        </div>
-        <div class="workspace-tools">
-          <label class="model-picker"><svg class="icon"><use href="#i-car"/></svg><span class="sr-only">차량 모델</span>
-            <select id="model"></select><span class="model-label" aria-hidden="true"><strong id="model-name"></strong><small id="model-variant"></small></span><svg class="icon chevron"><use href="#i-chevron"/></svg>
-          </label>
-          <div class="studio-actions" role="group" aria-label="작업 기록">
-            <button id="undo" class="round" type="button" title="실행 취소" aria-label="실행 취소" disabled><svg class="icon"><use href="#i-undo"/></svg></button>
-            <button id="redo" class="round" type="button" title="다시 실행" aria-label="다시 실행" disabled><svg class="icon"><use href="#i-redo"/></svg></button>
-            <button id="reset" class="round" type="button" title="디자인 초기화" aria-label="디자인 초기화" disabled><svg class="icon"><use href="#i-reset"/></svg></button>
+    <section class="studio" id="studio" data-screen="preview" aria-label="Wrap Studio">
+      <div class="studio-body" id="workspace" data-mobile-view="atlas">
+        <div class="studio-bar">
+          <div class="hero-copy">
+            <p class="kicker mono">TESLA PAINT SHOP / WRAP STUDIO</p>
+            <h1><span>당신의 차에,</span><span>당신의 디자인.</span></h1>
+            <p class="hero-note">테슬라 랩을 디자인하고, 차량 위에서 완성된 모습을 확인하세요.</p>
+            <a class="pill primary hero-edit" href="#editor">랩 편집 시작 <svg class="icon"><use href="#i-arrow-right"/></svg></a>
+          </div>
+          <div class="editor-title">
+            <p class="kicker mono">TESLA PAINT SHOP / EDITOR</p>
+            <h1>랩 디자인</h1>
+          </div>
+          <div class="workspace-tools">
+            <label class="model-picker"><svg class="icon"><use href="#i-car"/></svg><span class="sr-only">차량 모델</span>
+              <select id="model"></select><span class="model-label" aria-hidden="true"><strong id="model-name"></strong><small id="model-variant"></small></span><svg class="icon chevron"><use href="#i-chevron"/></svg>
+            </label>
+            <div class="studio-actions" role="group" aria-label="작업 기록">
+              <button id="undo" class="round" type="button" title="실행 취소" aria-label="실행 취소" disabled><svg class="icon"><use href="#i-undo"/></svg></button>
+              <button id="redo" class="round" type="button" title="다시 실행" aria-label="다시 실행" disabled><svg class="icon"><use href="#i-redo"/></svg></button>
+              <button id="reset" class="round" type="button" title="디자인 초기화" aria-label="디자인 초기화" disabled><svg class="icon"><use href="#i-reset"/></svg></button>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div class="studio-body" id="workspace" data-mobile-view="atlas">
         <div class="mobile-tabs" aria-label="작업 화면">
           <button type="button" data-mobile="atlas" aria-pressed="true">전개도</button>
           <button type="button" data-mobile="preview" aria-pressed="false">차량 프리뷰</button>
@@ -79,7 +89,9 @@
             <canvas id="flat-preview" aria-label="디자인 전개도 프리뷰" hidden></canvas>
             <div id="preview-message" class="stage-message" role="status">차량을 불러오는 중…</div>
           </div>
+          <p class="preview-caption">드래그하여 회전</p>
           <div class="pane-footer preview-footer">
+            <span class="view-label mono" aria-hidden="true">VIEW</span>
             <div id="views" class="view-controls" aria-label="프리뷰 시점">
               <button class="small-pill" type="button" data-view="angle" aria-pressed="true">사선</button>
               <button class="small-pill" type="button" data-view="front" aria-pressed="false">전면</button>

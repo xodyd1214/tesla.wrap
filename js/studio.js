@@ -333,7 +333,7 @@ function sync(dirty = true) {
 function syncPlacement() {
   const button = $('place-image');
   const layer = mode === 'image' ? activeForSelection() : null;
-  button.hidden = $('views').hidden || !layer;
+  button.hidden = $('studio').dataset.screen !== 'editor' || $('views').hidden || !layer;
   const projection = !button.hidden && placing ? layer.projection : null;
   button.setAttribute('aria-pressed', !!projection);
   button.textContent = projection ? '배치 완료' : '차량에 배치';
@@ -351,6 +351,22 @@ function setMobile(view) {
   else if (mobileLayout.matches) {
     viewer?.setOrbit(false);
     $('orbit').setAttribute('aria-pressed', 'false');
+  }
+}
+
+function showScreen() {
+  const screen = location.hash === '#editor' ? 'editor' : 'preview';
+  $('studio').dataset.screen = screen;
+  for (const link of document.querySelectorAll('[data-screen-link]')) {
+    if (link.dataset.screenLink === screen) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+  if (screen === 'preview') placing = false;
+  syncPlacement();
+  if (screen === 'preview') {
+    void showPreview();
+  } else if (mobileLayout.matches && $('workspace').dataset.mobileView === 'atlas') {
+    setMobile('atlas');
   }
 }
 
@@ -514,6 +530,7 @@ async function loadImage(file, onVehicle = false) {
     toast('PNG, JPG, WebP 이미지를 선택해 주세요.');
     return;
   }
+  if (onVehicle && $('studio').dataset.screen !== 'editor') location.hash = 'editor';
   const version = ++uploadVersion;
   const target = session;
   const parts = selectedParts();
@@ -746,7 +763,7 @@ atlasCanvas.addEventListener('pointermove', event => {
 });
 
 vehicle.addEventListener('pointerdown', event => {
-  if (!atlas || event.button !== 0 || pointer || mode !== 'image' || $('views').hidden) return;
+  if ($('studio').dataset.screen !== 'editor' || !atlas || event.button !== 0 || pointer || mode !== 'image' || $('views').hidden) return;
   const layer = activeForSelection();
   if (!layer?.projection) return;
   const placingImage = vehicle.hasAttribute('data-placing');
@@ -869,4 +886,9 @@ document.querySelector('[data-close]').addEventListener('click', () => $('guide'
 $('guide').addEventListener('click', event => { if (event.target === $('guide')) $('guide').close(); });
 
 placeTransformTools();
+window.addEventListener('hashchange', () => {
+  showScreen();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+});
+showScreen();
 void selectModel(models[0]);
