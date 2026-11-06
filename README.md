@@ -1,0 +1,32 @@
+# Wrap Studio
+
+Tesla Paint Shop용 디지털 랩 편집기입니다. 차종과 트림을 선택한 뒤 파츠마다 색을 채우거나, 여러 파츠에 하나의 이미지를 걸쳐 배치할 수 있습니다. 전개도의 옅은 이미지는 잘리는 영역을 보여 줍니다. 화면을 처음 열면 Model 3 Highland에 예제 이미지가 적용되어 있습니다. 새로 시작하려면 편집기 위쪽의 초기화 버튼을 누르세요.
+
+## 로컬 실행
+
+프로젝트 폴더에서 정적 서버를 실행한 뒤 브라우저에서 `http://localhost:8042`를 여세요.
+
+```sh
+python3 -m http.server 8042 --bind 127.0.0.1
+```
+
+별도 빌드나 API 키가 필요 없습니다. 차종을 처음 선택하면 브라우저가 Tesla 공식 저장소에서 해당 PNG 전개도를 가져옵니다. 올린 이미지와 편집 상태는 현재 브라우저 탭에 머무르므로, 필요한 결과는 탭을 닫기 전에 PNG로 저장하세요.
+
+## GitHub Pages
+
+1. 이 프로젝트 파일을 GitHub 저장소의 `main` 브랜치에 커밋하고 푸시합니다.
+2. GitHub 저장소의 **Settings → Pages**에서 **Deploy from a branch**를 선택합니다.
+3. **main**과 **/ (root)**를 고르고 저장합니다. 배포가 끝나면 같은 화면에 사이트 주소가 표시됩니다.
+
+## 편집과 내보내기
+
+- 파츠 버튼이나 전개도 자체를 눌러 선택합니다. 왼쪽·오른쪽 도어 버튼은 같은 쪽 앞뒤 도어를 함께 선택합니다.
+- PNG, JPG, WebP를 올리고 이미지를 끌어 이동합니다. 크기와 회전 슬라이더도 사용할 수 있습니다. 색상 탭에서 선택한 파츠의 이미지를 단색으로 교체할 수 있습니다.
+- Model 3 Highland의 Standard / Premium 및 Performance 전개도에서 회전 가능한 3D 프리뷰를 제공합니다. 두 트림은 동일한 Highland 메시를 사용하며, 랩은 각 파츠에 근사 투영됩니다. 다른 차종과 WebGL을 사용할 수 없는 브라우저에는 전개도 프리뷰가 표시됩니다.
+- 내보내기는 공식 전개도 비율을 유지합니다. PNG가 1 MB를 넘으면 크기를 단계적으로 낮춥니다. 차량 전송은 Tesla 앱의 **Creations → Wrap → Upload** 또는 USB의 `Wraps` 폴더를 이용합니다. [Tesla 적용 안내](https://github.com/teslamotors/custom-wraps#how-to-use-custom-wraps)
+
+## 출처
+
+- 차종별 전개도와 차량 적용 규격은 [Tesla custom-wraps](https://github.com/teslamotors/custom-wraps/tree/86c7d31454caf0f20af6f6af105f577643f13bce)를 사용합니다.
+- 3D 메시 출처와 라이선스는 [모델 크레딧](assets/models/CREDITS.md)에 있습니다. 렌더링은 [Three.js](https://github.com/mrdoob/three.js)를 사용합니다.
+- 편집 화면은 중립색을 기본으로 사용하며, 선택한 항목에 옅은 라일락을 적용합니다. 서체는 Inter와 JetBrains Mono를 사용합니다.

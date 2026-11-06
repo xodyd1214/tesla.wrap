@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Tesla 공식 전개도로 디지털 랩을 만들고, 차량 위에서 미리 확인하세요.">
+  <title>Wrap Studio — 테슬라 디지털 랩 편집기</title>
+  <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./js/studio.js"></script>
+</head>
+<body>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></symbol>
+    <symbol id="i-up-right" viewBox="0 0 24 24"><path d="M6 18 18 6M8 6h10v10"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m-5 5 5-5 5 5M5 16v4h14v-4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-car" viewBox="0 0 24 24"><path d="m4 10 2-5h12l2 5M3 10h18v8H3zM6 18v2m12-2v2M6 14h2m8 0h2"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 6 4 11l5 5m-5-5h10a5 5 0 0 1 5 5"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 6 5 5-5 5m5-5H10a5 5 0 0 0-5 5"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 5v6h6M4.5 10.5A8 8 0 1 1 5 16"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 16l5-5 3 3 3-4 5 6M8 8h.01"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3c3.5 4 6 7.1 6 10.4a6 6 0 1 1-12 0C6 10.1 8.5 7 12 3Z"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14m-7-7v14"/></symbol>
+    <symbol id="i-frame" viewBox="0 0 24 24"><path d="M3 9V3h6m6 0h6v6m0 6v6h-6m-6 0H3v-6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/></symbol>
+    <symbol id="i-orbit" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 1-3.7-6.8M20 4v6h-6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 1-1 2.2m0 3h.01"/></symbol>
+  </svg>
+
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="./" aria-label="Wrap Studio 홈"><img src="./assets/mark.svg" alt="" width="32" height="32"> Wrap Studio</a>
+      <div class="header-actions">
+        <button class="guide-button" type="button" data-guide><svg class="icon"><use href="#i-help"/></svg><span>사용 가이드</span></button>
+        <button id="export" class="pill primary" type="button" disabled><svg class="icon"><use href="#i-download"/></svg> PNG 내보내기</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="studio" aria-labelledby="page-title">
+      <div class="studio-bar">
+        <div class="workspace-title">
+          <p class="kicker mono">PAINT SHOP EDITOR</p>
+          <h1 id="page-title">랩 디자인</h1>
+        </div>
+        <div class="workspace-tools">
+          <label class="model-picker"><svg class="icon"><use href="#i-car"/></svg><span class="sr-only">차량 모델</span>
+            <select id="model"></select><span class="model-label" aria-hidden="true"><strong id="model-name"></strong><small id="model-variant"></small></span><svg class="icon chevron"><use href="#i-chevron"/></svg>
+          </label>
+          <div class="studio-actions" role="group" aria-label="작업 기록">
+            <button id="undo" class="round" type="button" title="실행 취소" aria-label="실행 취소" disabled><svg class="icon"><use href="#i-undo"/></svg></button>
+            <button id="redo" class="round" type="button" title="다시 실행" aria-label="다시 실행" disabled><svg class="icon"><use href="#i-redo"/></svg></button>
+            <button id="reset" class="round" type="button" title="디자인 초기화" aria-label="디자인 초기화" disabled><svg class="icon"><use href="#i-reset"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="studio-body" id="workspace" data-mobile-view="atlas">
+        <div class="mobile-tabs" aria-label="작업 화면">
+          <button type="button" data-mobile="atlas" aria-pressed="true">전개도</button>
+          <button type="button" data-mobile="preview" aria-pressed="false">차량 프리뷰</button>
+        </div>
+        <section class="pane preview-pane" aria-labelledby="preview-heading">
+          <div class="pane-heading">
+            <div class="pane-title"><h2 id="preview-heading">차량 프리뷰</h2><span id="preview-badge" class="pane-meta mono">3D</span></div>
+            <span class="live"><i></i> 실시간</span>
+          </div>
+          <div class="stage preview-stage" id="preview-stage">
+            <div id="vehicle" class="vehicle" aria-label="회전 가능한 3D 차량"></div>
+            <canvas id="flat-preview" aria-label="디자인 전개도 프리뷰" hidden></canvas>
+            <div id="preview-message" class="stage-message" role="status">차량을 불러오는 중…</div>
+          </div>
+          <div class="pane-footer preview-footer">
+            <div id="views" class="view-controls" aria-label="프리뷰 시점">
+              <button class="small-pill" type="button" data-view="angle" aria-pressed="true">사선</button>
+              <button class="small-pill" type="button" data-view="side" aria-pressed="false">측면</button>
+              <button class="small-pill" type="button" data-view="top" aria-pressed="false">상단</button>
+            </div>
+            <button id="orbit" class="round text-control" type="button" aria-pressed="false" title="자동 회전" aria-label="자동 회전"><svg class="icon"><use href="#i-orbit"/></svg>자동 회전</button>
+            <p id="flat-note" hidden>이 차종은 전개도 프리뷰를 지원해요.</p>
+          </div>
+        </section>
+        <section class="pane atlas-pane" aria-labelledby="atlas-heading">
+          <div class="pane-heading">
+            <div class="pane-title"><h2 id="atlas-heading">전개도</h2><span id="dimensions" class="pane-meta mono">1024 × 1024</span></div>
+            <button id="guide-toggle" class="round text-control" type="button" aria-pressed="true" title="이미지 겹침 가이드" aria-label="이미지 겹침 가이드"><svg class="icon"><use href="#i-eye"/></svg>가이드</button>
+          </div>
+          <div class="stage atlas-stage" id="atlas-stage">
+            <div class="atlas-sheet"><canvas id="atlas" tabindex="0" aria-label="전개도. 이미지가 선택된 상태에서 방향키로 이동할 수 있습니다."></canvas></div>
+            <div class="stage-message" id="atlas-message" role="status">공식 전개도를 불러오는 중…</div>
+          </div>
+          <div class="pane-footer">
+            <p id="atlas-hint">끌어서 이미지 이동</p>
+            <div class="zoom-group" aria-label="전개도 확대">
+              <button id="zoom-out" class="round" type="button" aria-label="전개도 축소"><svg class="icon"><use href="#i-minus"/></svg></button>
+              <button id="zoom-reset" type="button" aria-label="전개도 배율 초기화" class="zoom-value mono">100%</button>
+              <button id="zoom-in" class="round" type="button" aria-label="전개도 확대"><svg class="icon"><use href="#i-plus"/></svg></button>
+            </div>
+          </div>
+        </section>
+
+        <div id="mobile-transform-slot"></div>
+        <aside class="inspector" aria-labelledby="inspector-heading">
+          <div class="pane-heading inspector-heading"><h2 id="inspector-heading">편집 도구</h2></div>
+          <section class="inspector-section parts-section" aria-labelledby="parts-heading">
+            <div class="inspector-title"><h3 id="parts-heading">파츠</h3><span id="count" class="count">0개 선택</span></div>
+            <div class="groups" role="group" aria-label="파츠 그룹">
+              <button class="small-pill" type="button" data-group="all">전체 선택</button>
+              <button class="small-pill" type="button" data-group="l">왼쪽 도어</button>
+              <button class="small-pill" type="button" data-group="r">오른쪽 도어</button>
+            </div>
+            <div id="parts" class="parts-grid" aria-label="선택 가능한 파츠"></div>
+            <button id="expand-parts" class="part-expander" type="button" aria-expanded="false" aria-controls="parts"><span>파츠 목록 펼치기</span><svg class="icon"><use href="#i-chevron"/></svg></button>
+          </section>
+          <section class="inspector-section design-section" aria-labelledby="design-heading">
+            <div class="inspector-title"><h3 id="design-heading">디자인</h3></div>
+            <div class="tabs" role="group" aria-label="디자인 도구">
+              <button class="tab" type="button" data-mode="image" aria-pressed="true"><svg class="icon"><use href="#i-image"/></svg> 이미지</button>
+              <button class="tab" type="button" data-mode="color" aria-pressed="false"><svg class="icon"><use href="#i-drop"/></svg> 색상</button>
+            </div>
+            <div id="image-tools">
+              <button type="button" id="upload" class="upload">
+                <svg class="icon"><use href="#i-upload"/></svg>
+                <span><strong>이미지 올리기</strong><small>PNG · JPG · WebP</small></span>
+              </button>
+              <input id="file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+              <div id="active-image" class="active-image" hidden>
+                <div class="image-row">
+                  <canvas id="thumbnail" width="44" height="44" aria-hidden="true"></canvas>
+                  <div class="file-info"><strong id="filename"></strong><small id="image-targets"></small></div>
+                  <button class="round" id="delete-image" type="button" title="이미지 제거" aria-label="이미지 제거"><svg class="icon"><use href="#i-trash"/></svg></button>
+                </div>
+                <div class="transform-controls" id="transform-tools">
+                  <label><span>크기</span><input id="scale" type="range" min="10" max="400" value="100"><output id="scale-value" for="scale">100%</output></label>
+                  <label><span>회전</span><input id="rotation" type="range" min="-180" max="180" value="0"><output id="rotation-value" for="rotation">0°</output></label>
+                  <div class="image-commands"><button id="fit-image" type="button" class="small-pill"><svg class="icon"><use href="#i-frame"/></svg>영역에 맞춤</button><button id="apply-image" type="button" class="small-pill" hidden>현재 선택에 적용</button></div>
+                </div>
+              </div>
+            </div>
+            <div id="color-tools" hidden>
+              <p class="section-hint">선택한 파츠를 단색으로 채웁니다.</p>
+              <div id="swatches" class="swatches" aria-label="색상 팔레트"></div>
+              <div class="custom-color">
+                <label for="picker">사용자 색상</label>
+                <input id="picker" type="color" value="#c5b0f4">
+                <button id="apply-color" class="small-pill" type="button">적용</button>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+    </section>
+    <footer class="site-footer">
+      <span>Wrap Studio <small>· 이미지는 기기 안에서만 처리됩니다.</small></span>
+      <a href="https://github.com/teslamotors/custom-wraps" target="_blank" rel="noopener">Tesla 공식 템플릿 <svg class="icon"><use href="#i-up-right"/></svg></a>
+    </footer>
+  </main>
+
+  <dialog id="guide">
+    <div class="dialog-heading"><div><p class="mono kicker">QUICK GUIDE</p><h2>차량에 랩 적용하기</h2></div><button class="round" type="button" data-close aria-label="가이드 닫기"><svg class="icon"><use href="#i-close"/></svg></button></div>
+    <ol>
+      <li>실제 차량과 같은 모델을 고르고, 전개도나 목록에서 파츠를 선택하세요.</li>
+      <li>이미지를 올린 뒤 전개도에서 끌어 배치하세요. 여러 파츠에 걸쳐 하나의 이미지를 넣거나 팔레트에서 색을 적용할 수 있어요.</li>
+      <li><strong>PNG 내보내기</strong>를 누른 뒤 Tesla 앱의 <strong>Creations → Wrap → Upload</strong>에서 파일을 선택하세요. USB로 옮길 때는 <code>Wraps</code> 폴더에 넣으세요.</li>
+      <li>차량에서 <strong>Toybox → Paint Shop → Wraps</strong>를 열어 적용하세요.</li>
+    </ol>
+    <p class="dialog-note">Model 3 Highland의 3D 프리뷰는 별도 차량 모델을 사용한 근사 시각화입니다. 내보낸 PNG는 Tesla 공식 전개도에 맞춰 저장됩니다.</p>
+    <a class="pill secondary" href="https://github.com/teslamotors/custom-wraps#how-to-use-custom-wraps" target="_blank" rel="noopener">Tesla 적용 안내 <svg class="icon"><use href="#i-up-right"/></svg></a>
+  </dialog>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>
