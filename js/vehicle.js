@@ -15,6 +15,7 @@ const modelYPanels = {
   'MY-365': 'trunk', 'MY-366': 'bumper-rear', 'MY-367': 'bumper-rear',
 };
 const modelYHeadlightNodes = new Set(['MY-228', 'MY-229', 'MY-267', 'MY-268']);
+const modelYTaillightNodes = new Set(['MY-318', 'MY-319', 'MY-320', 'MY-321', 'MY-322', 'MY-323']);
 const legacyModel3Panels = {
   Object_246: 'trunk', Object_336: 'door-rear-l', Object_394: 'door-rear-r',
   Object_428: 'bumper-front', Object_435: 'bumper-rear', Object_445: 'hood',
@@ -208,6 +209,7 @@ function prepareCar(source, texture, model) {
   const trimNormals = [];
   let modelYGlass;
   let modelYHeadlights;
+  let modelYTaillights;
 
   source.traverse(object => {
     // The legacy asset's separate charge flap protrudes from the closed body.
@@ -232,8 +234,10 @@ function prepareCar(source, texture, model) {
     if (!mappedPart && !classify) {
       let material = model.highland ? materialFor(object.material.name, object.material) : object.material;
       if (material.name === 'glass_body') {
-        // Soften reflections on the simplified glass surface.
-        modelYGlass ??= Object.assign(material.clone(), { roughness: .34, metalness: .28, envMapIntensity: .55 });
+        modelYGlass ??= Object.assign(material.clone(), {
+          color: new T.Color('#151b23'), roughness: .26, metalness: .05, envMapIntensity: .6,
+          transparent: true, opacity: .74, depthWrite: false,
+        });
         material = modelYGlass;
       } else if (modelYHeadlightNodes.has(object.name)) {
         // Keep the lenses distinct from the white paint in the front view.
@@ -242,6 +246,13 @@ function prepareCar(source, texture, model) {
           modelYHeadlights.color.set('#8997a8');
         }
         material = modelYHeadlights;
+      } else if (modelYTaillightNodes.has(object.name)) {
+        // Give the colored outer lens priority over the overlapping inner lens surfaces.
+        modelYTaillights ??= Object.assign(material.clone(), {
+          color: new T.Color('#771b26'), roughness: .32, metalness: .1,
+          polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+        });
+        material = modelYTaillights;
       }
       car.add(new T.Mesh(geometry, material));
       return;
