@@ -146,15 +146,20 @@ function paint(color) {
   });
 }
 
-function setSelection(next) {
+function setSelection(next, focusedPart) {
+  const previous = activeForSelection();
   session.selected = new Set(next);
   const first = next[0];
-  const active = activeImage();
-  if (!active || !active.parts.some(id => session.selected.has(id))) {
+  const focusedImage = getImageAt(focusedPart);
+  if (focusedImage) {
+    session.active = session.layers.indexOf(focusedImage);
+  } else if (!activeForSelection()) {
     const target = next.find(id => getImageAt(id));
     const index = session.layers.indexOf(getImageAt(target));
     if (index >= 0) session.active = index;
   }
+  const editable = activeForSelection();
+  if (editable !== previous) placing = !!editable?.projection;
   if (first && session.colors[first]) $('picker').value = session.colors[first];
   sync(false);
 }
@@ -163,7 +168,7 @@ function togglePart(id) {
   const next = new Set(session.selected);
   if (next.has(id)) next.delete(id);
   else next.add(id);
-  setSelection([...next]);
+  setSelection([...next], next.has(id) ? id : undefined);
 }
 
 function drawLayer(ctx, layer, dx = 0, dy = 0) {
@@ -517,8 +522,8 @@ async function loadImage(file, onVehicle = false) {
     const projection = target.model.preview && !viewerFailed && (onVehicle || parts.length > 1) ?
       viewer?.getProjection() : null;
     const layer = fitLayer(asset, parts, projection);
-    placing = !!layer.projection;
     setSelection(parts.map(part => part.id));
+    placing = !!layer.projection;
     transact(() => replaceSelectedWith(layer));
     if (mobileLayout.matches) {
       setMobile(placing ? 'preview' : 'atlas');
