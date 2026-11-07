@@ -266,9 +266,27 @@ canvas { display: block; max-width: 100%; }
   word-break: keep-all;
 }
 .part-button:hover { background: var(--soft); }
-.part-button[aria-pressed=true] { background: var(--soft); border-color: var(--line); color: var(--ink); font-weight: 650; }
+.part-button[aria-pressed=true] { background: var(--wash); border-color: var(--line); color: var(--ink); font-weight: 650; }
 .part-button:focus-visible { outline-offset: -2px; }
-.part-dot { width: 10px; height: 10px; border: 1px solid #00000026; border-radius: 3px; background: var(--dot, white); flex: none; }
+.part-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  background: var(--paper);
+}
+.part-button[aria-pressed=true] .part-check { background: var(--accent); border-color: var(--accent); }
+.part-button[aria-pressed=true] .part-check::after {
+  content: '';
+  width: 4px;
+  height: 7px;
+  border: solid var(--paper);
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
 
 .tabs { display: flex; gap: 3px; padding: 3px; margin-bottom: 11px; border-radius: 999px; background: var(--soft); }
 .tab { flex: 1; min-height: 32px; padding: 0 7px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 560; }

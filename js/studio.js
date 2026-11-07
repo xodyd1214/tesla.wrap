@@ -334,9 +334,7 @@ function sync(dirty = true) {
   $('import-template').disabled = false;
   $('save-project-button').disabled = false;
   for (const button of partsGrid.children) {
-    const id = button.dataset.part;
-    button.setAttribute('aria-pressed', session.selected.has(id));
-    button.style.setProperty('--dot', getImageAt(id) ? '#6c6c6c' : session.colors[id] || '#fff');
+    button.setAttribute('aria-pressed', session.selected.has(button.dataset.part));
   }
   $('select-all').disabled = !atlas.parts.length;
   $('select-all').setAttribute('aria-pressed', atlas.parts.length > 0 && atlas.parts.every(part => session.selected.has(part.id)));
@@ -579,10 +577,10 @@ async function selectModel(model, saved = null) {
       button.type = 'button';
       button.className = 'part-button';
       button.dataset.part = part.id;
-      const dot = document.createElement('span');
-      dot.className = 'part-dot';
-      dot.setAttribute('aria-hidden', 'true');
-      button.append(dot, part.label);
+      const check = document.createElement('span');
+      check.className = 'part-check';
+      check.setAttribute('aria-hidden', 'true');
+      button.append(check, part.label);
       partsGrid.append(button);
     }
     $('atlas-message').hidden = true;
