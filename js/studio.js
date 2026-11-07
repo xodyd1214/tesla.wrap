@@ -9,6 +9,7 @@ const flat = $('flat-preview');
 const partsGrid = $('parts');
 const modelInput = $('model');
 const transformTools = $('transform-tools');
+const basisControls = $('placement-basis');
 const basisButtons = document.querySelectorAll('[data-basis]');
 const showProjectsButton = $('show-projects');
 const projectDialog = $('projects');
@@ -348,8 +349,8 @@ function sync(dirty = true) {
   const editable = activeForSelection();
   const canMove = !!editable && !editable.projection && mode === 'image';
   atlasCanvas.classList.toggle('movable', canMove);
-  $('atlas-hint').textContent = editable?.projection && mode === 'image' ? '차량 프리뷰에서 이미지 이동' :
-    canMove ? '끌어서 이미지 이동' : '전개도에서 파츠 선택';
+  $('atlas-hint').textContent = editable?.projection && mode === 'image' ? '차량 맞춤 · 프리뷰에서 끌어 이동' :
+    canMove ? '원본 배치 · 전개도에서 끌어 이동' : '전개도에서 파츠 선택';
   $('active-image').hidden = !layer;
   transformTools.hidden = !layer || mode !== 'image';
   if (layer) {
@@ -483,14 +484,20 @@ async function chooseBasis(basis) {
   const projection = basis === 'vehicle' ? await currentProjection() : null;
   if (version !== uploadVersion || layer !== activeForSelection() || mode !== 'image') return;
   const parts = atlas.parts.filter(part => layer.parts.includes(part.id));
-  const replacement = fitLayer(layer.asset, parts, projection);
-  if (basis === 'vehicle' && !replacement.projection) {
-    toast('이 파츠 조합에서는 차량 기준을 사용할 수 없어요.');
+  const replacement = layer.alternatePlacement || fitLayer(layer.asset, parts, projection);
+  if (basis === 'vehicle' && (!projection || !replacement.projection)) {
+    toast('이 파츠 조합에서는 차량 맞춤을 사용할 수 없어요.');
     return;
+  }
+  const { x, y, fit, scale, rotation, projection: previousProjection } = layer;
+  const alternatePlacement = { x, y, fit, scale, rotation, projection: previousProjection };
+  if (basis === 'vehicle' && !layer.alternatePlacement) {
+    replacement.scale = scale;
+    replacement.rotation = rotation;
   }
   placing = !!replacement.projection;
   newImageBasis = basis;
-  transact(() => Object.assign(layer, replacement, { scale: layer.scale, rotation: layer.rotation }));
+  transact(() => Object.assign(layer, replacement, { alternatePlacement }));
   if (mobileLayout.matches) {
     setMobile(placing ? 'preview' : 'atlas');
     $('workspace').scrollIntoView({ block: 'start' });
@@ -627,7 +634,7 @@ async function loadImage(file, basis = placementBasis()) {
       setMobile(placing ? 'preview' : 'atlas');
       $('workspace').scrollIntoView({ block: 'start' });
     }
-    toast(onVehicle && !layer.projection ? '이 파츠 조합은 전개도 기준으로 적용했어요.' : parts.length + '개 파츠에 이미지를 적용했어요.');
+    toast(onVehicle && !layer.projection ? '이 파츠 조합에는 원본 배치를 적용했어요.' : parts.length + '개 파츠에 이미지를 적용했어요.');
   } catch {
     if (version === uploadVersion) toast('이미지를 열 수 없어요. 다른 파일을 선택해 주세요.');
   } finally {
@@ -808,14 +815,15 @@ $('select-all').addEventListener('click', event => {
   setSelection(event.currentTarget.getAttribute('aria-pressed') === 'true' ? [] : atlas.parts.map(part => part.id));
 });
 
+function setTool(next) {
+  mode = next;
+  for (const tab of document.querySelectorAll('[data-mode]')) tab.setAttribute('aria-pressed', tab.dataset.mode === mode);
+  $('image-tools').hidden = mode !== 'image';
+  $('color-tools').hidden = mode !== 'color';
+  sync(false);
+}
 for (const button of document.querySelectorAll('[data-mode]')) {
-  button.addEventListener('click', () => {
-    mode = button.dataset.mode;
-    for (const tab of document.querySelectorAll('[data-mode]')) tab.setAttribute('aria-pressed', tab === button);
-    $('image-tools').hidden = mode !== 'image';
-    $('color-tools').hidden = mode !== 'color';
-    sync(false);
-  });
+  button.addEventListener('click', () => setTool(button.dataset.mode));
 }
 for (const [label, color] of swatchColors) {
   const button = document.createElement('button');
@@ -829,7 +837,10 @@ for (const [label, color] of swatchColors) {
   $('swatches').append(button);
 }
 $('apply-color').addEventListener('click', () => paint($('picker').value));
-for (const button of basisButtons) button.addEventListener('click', () => void chooseBasis(button.dataset.basis));
+for (const button of basisButtons) button.addEventListener('click', () => {
+  if (mode !== 'image') setTool('image');
+  void chooseBasis(button.dataset.basis);
+});
 $('upload').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', event => {
   void loadImage(event.target.files[0]);
@@ -879,7 +890,7 @@ $('apply-image').addEventListener('click', async () => {
   placing = !!replacement.projection;
   transact(() => replaceSelectedWith(replacement));
   if (placing && mobileLayout.matches) setMobile('preview');
-  if (onVehicle && !replacement.projection) toast('이 파츠 조합은 전개도 기준으로 적용했어요.');
+  if (onVehicle && !replacement.projection) toast('이 파츠 조합에는 원본 배치를 적용했어요.');
 });
 
 $('place-image').addEventListener('click', () => {
@@ -1043,12 +1054,12 @@ $('zoom-out').addEventListener('click', () => setZoom(zoom - 0.25));
 $('zoom-in').addEventListener('click', () => setZoom(zoom + 0.25));
 $('zoom-reset').addEventListener('click', () => setZoom(1));
 for (const button of document.querySelectorAll('[data-mobile]')) button.addEventListener('click', () => setMobile(button.dataset.mobile));
-function placeTransformTools() {
-  const target = mobileLayout.matches ? $('mobile-transform-slot') : $('active-image');
-  target.append(transformTools);
+function placeEditorControls() {
+  $(mobileLayout.matches ? 'mobile-transform-slot' : 'active-image').append(transformTools);
+  $(mobileLayout.matches ? 'mobile-basis-slot' : 'atlas-basis-slot').append(basisControls);
 }
 mobileLayout.addEventListener('change', () => {
-  placeTransformTools();
+  placeEditorControls();
   void showPreview();
 });
 for (const button of document.querySelectorAll('[data-view]')) {
@@ -1075,5 +1086,5 @@ for (const button of document.querySelectorAll('[data-guide]')) button.addEventL
 document.querySelector('[data-close]').addEventListener('click', () => $('guide').close());
 $('guide').addEventListener('click', event => { if (event.target === $('guide')) $('guide').close(); });
 
-placeTransformTools();
+placeEditorControls();
 void selectModel(models[0]);

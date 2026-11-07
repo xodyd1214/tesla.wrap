@@ -139,7 +139,7 @@ canvas { display: block; max-width: 100%; }
   scroll-margin-top: 96px;
 }
 .pane, .inspector { min-width: 0; }
-.mobile-tabs, #mobile-transform-slot { display: none; }
+.mobile-tabs, #mobile-basis-slot, #mobile-transform-slot { display: none; }
 .preview-pane { grid-area: preview; }
 .atlas-pane { grid-area: atlas; }
 .inspector { grid-area: inspector; border-left: 1px solid var(--line); }
@@ -152,6 +152,9 @@ canvas { display: block; max-width: 100%; }
   padding: 6px 3px;
 }
 .pane-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.atlas-toolbar { justify-content: start; }
+.atlas-toolbar > .pane-title { flex: 1; }
+#atlas-basis-slot:empty { display: none; }
 .pane-heading h2 { font-size: 23px; font-weight: 540; letter-spacing: -.05em; }
 .pane-meta { font-size: 10px; color: var(--muted); white-space: nowrap; }
 #preview-badge { padding: 2px 6px; border: 1px solid var(--line); border-radius: 999px; }
@@ -251,11 +254,10 @@ canvas { display: block; max-width: 100%; }
   display: flex;
   gap: 3px;
   padding: 3px;
-  margin-bottom: 9px;
   border-radius: 9px;
   background: var(--soft);
 }
-.placement-basis button { flex: 1; padding-inline: 4px; color: var(--muted); }
+.placement-basis button { flex: 1; padding-inline: 8px; color: var(--muted); }
 .placement-basis button[aria-pressed=true] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 4px #00000015; }
 .upload {
   display: flex;
@@ -423,6 +425,7 @@ dialog li + li { margin-top: 9px; }
   .mobile-tabs { display: flex; gap: 3px; padding: 3px; border-radius: 11px; background: var(--soft); order: -3; }
   .mobile-tabs button { flex: 1; min-height: 44px; border-radius: 7px; color: var(--muted); font-size: 13px; font-weight: 550; }
   .mobile-tabs button[aria-pressed=true] { color: var(--accent); background: var(--paper); border-color: var(--line); box-shadow: 0 1px 3px #00000012; }
+  #mobile-basis-slot { display: block; order: -2; }
   .pane { order: -2; padding: 0; }
   .pane-heading { min-height: 50px; padding: 4px 3px; }
   .pane-heading h2 { font-size: 18px; }
