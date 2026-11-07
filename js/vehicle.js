@@ -110,21 +110,25 @@ function highlandSkin([x0, y0, z0, x1, y1, z1]) {
   return null;
 }
 
-function highlandRearSkin([x0, y0, z0, x1, y1, z1]) {
-  // The pinned Highland shell keeps indexed surfaces along the seams of the
-  // plate recess, trunk, and bumper. The bounds identify whole surfaces.
+function highlandShellSkin([x0, y0, z0, x1, y1, z1]) {
+  const side = x0 < 0 ? 'l' : 'r';
+  const innerX = Math.max(x0, -x1);
+  // Keep the upper fender and its bevel together along the hood seam.
+  if (innerX > .42 && innerX < .44 && y0 > .61 && y1 > .90 &&
+    z0 > -2.18 && z0 < -2.17 && z1 > -1.03 && z1 < -.94) return 'fender-front-' + side;
+
+  // Use the indexed surfaces along the seams of the plate recess, trunk, and bumper.
   const halfWidth = Math.min(-x0, x1);
   if (halfWidth > .58 && y0 > .60 && y1 < .83 && z0 > 2.16 && z1 < 2.30) return 'trim-rear';
   if (halfWidth > .69 && y0 > .82 && z1 > 2.30 &&
     (z0 > 1.54 && z0 < 1.56 || z0 > 2.05 && z0 < 2.06)) return 'trunk';
   if (z0 > 2.06 && z1 > 2.35 && y1 < .80 &&
     (halfWidth > .75 || halfWidth > .37 && y0 > .54 && y1 < .58)) return 'bumper-rear';
-  const innerX = Math.max(x0, -x1);
   if (innerX > .65 && y0 < .18 && y1 > .77 && z0 > 1.67 && z0 < 1.69 && z1 > 2.15) return 'bumper-rear';
   if (innerX > .68 && y0 > .14 && y1 < .25 && z0 > 1.77 && z1 > 2.06 && z1 < 2.08) return 'bumper-rear';
   // The upper quarter panels run alongside the rear glass and trunk deck.
   if (innerX > .57 && y0 > .92 && y1 > 1.12 && z0 > 1.25 && z0 < 1.55 && z1 > 1.87 && z1 < 2.06) {
-    return x0 < 0 ? 'fender-rear-l' : 'fender-rear-r';
+    return 'fender-rear-' + side;
   }
   return null;
 }
@@ -315,8 +319,8 @@ function prepareCar(source, model) {
     const normal = geometry.getAttribute('normal');
     const index = geometry.getIndex();
     const skinAt = classify ? separateSkins(position, index, classify) : null;
-    // Keep the original rear seams that welding would join.
-    const rearSkinAt = model.highland && outerShell ? separateSkins(position, index, highlandRearSkin, false) : null;
+    // Keep the original body seams that welding would join.
+    const shellSkinAt = model.highland && outerShell ? separateSkins(position, index, highlandShellSkin, false) : null;
     for (let i = 0; i < (index?.count ?? position.count); i += 3) {
       const indices = [i, i + 1, i + 2].map(id => index ? index.getX(id) : id);
       const values = indices.map(id => [position.getX(id), position.getY(id), position.getZ(id)]);
@@ -325,7 +329,7 @@ function prepareCar(source, model) {
       const axleDistance = Math.min(Math.abs(z + 1.48), Math.abs(z - 1.39));
       const wheel = object.material.name === 'Georimblurlfsub01Mtl' &&
         Math.abs(x) > .855 && Math.hypot(y - .345, axleDistance) < .275;
-      let part = mappedPart || (wheel ? null : rearSkinAt?.(indices[0]) || skinAt?.(indices[0]) ||
+      let part = mappedPart || (wheel ? null : shellSkinAt?.(indices[0]) || skinAt?.(indices[0]) ||
         (highlandPaint ? exteriorPart(x, y, z, ny, outerShell) : null));
       if (model.rearCorners && part === 'bumper-rear' && Math.abs(x) > .83 && y < .6 && z > 1.65 && z < 2.12) {
         part = x < 0 ? 'corner-l' : 'corner-r';
