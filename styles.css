@@ -237,8 +237,7 @@ canvas { display: block; max-width: 100%; }
 .groups { display: flex; margin-bottom: 9px; }
 .groups button { flex: 1; padding-inline: 8px; min-height: 32px; border-color: var(--line); border-radius: 999px; font-size: 12px; }
 .groups .small-pill[aria-pressed=true] { background: var(--wash); color: var(--accent); }
-.parts-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3px 4px; max-height: 145px; overflow: auto; scrollbar-width: thin; }
-.parts-grid.expanded { max-height: none; }
+.parts-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3px 4px; }
 .part-button {
   display: flex;
   align-items: center;
@@ -257,10 +256,6 @@ canvas { display: block; max-width: 100%; }
 .part-button[aria-pressed=true] { background: var(--soft); border-color: var(--line); color: var(--ink); font-weight: 650; }
 .part-button:focus-visible { outline-offset: -2px; }
 .part-dot { width: 10px; height: 10px; border: 1px solid #00000026; border-radius: 3px; background: var(--dot, white); flex: none; }
-.part-expander { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; padding: 2px 7px; min-height: 29px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 12px; }
-.part-expander .icon { width: 11px; height: 11px; }
-.part-expander[aria-expanded=true] .icon { transform: rotate(180deg); }
-.part-expander:hover { color: var(--ink); background: var(--soft); }
 
 .tabs { display: flex; gap: 3px; padding: 3px; margin-bottom: 11px; border-radius: 999px; background: var(--soft); }
 .tab { flex: 1; min-height: 32px; padding: 0 7px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 560; }
@@ -465,8 +460,7 @@ dialog li + li { margin-top: 9px; }
   .inspector-heading { min-height: 50px; padding-inline: 12px; }
   .inspector-section { padding: 12px; }
   .inspector-section + .inspector-section { border-top: 1px solid var(--line); border-left: 0; }
-  .parts-grid { max-height: 141px; }
-  .part-button, .part-expander, .groups button, .tab, .image-row .round,
+  .part-button, .groups button, .tab, .image-row .round,
   .preview-footer .round, .view-controls .small-pill, .zoom-group .round, .zoom-value,
   .image-commands button, .placement-basis button, .custom-color input, .custom-color button { min-height: 44px; }
   .part-button { padding-inline: 8px; font-size: 12px; }

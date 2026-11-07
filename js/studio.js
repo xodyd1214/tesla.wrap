@@ -531,7 +531,6 @@ async function selectModel(model, saved = null) {
   document.querySelector('[data-mobile=preview]').textContent = model.preview ? '3D 프리뷰' : '디자인 프리뷰';
   $('active-image').hidden = true;
   transformTools.hidden = true;
-  $('expand-parts').disabled = true;
   for (const id of ['undo', 'redo', 'reset', 'export', 'upload', 'apply-color', 'save-project-button']) $(id).disabled = true;
   $('select-all').disabled = true;
   syncBasis();
@@ -586,7 +585,6 @@ async function selectModel(model, saved = null) {
       partsGrid.append(button);
     }
     $('atlas-message').hidden = true;
-    $('expand-parts').disabled = false;
     sync();
     void showPreview();
   } catch (error) {
@@ -804,11 +802,6 @@ modelInput.addEventListener('change', () => void selectModel(models.find(model =
 partsGrid.addEventListener('click', event => {
   const button = event.target.closest('[data-part]');
   if (atlas && button) togglePart(button.dataset.part);
-});
-$('expand-parts').addEventListener('click', () => {
-  const expanded = partsGrid.classList.toggle('expanded');
-  $('expand-parts').setAttribute('aria-expanded', expanded);
-  $('expand-parts').firstElementChild.textContent = expanded ? '파츠 목록 접기' : '파츠 목록 펼치기';
 });
 $('select-all').addEventListener('click', event => {
   if (!atlas) return;
