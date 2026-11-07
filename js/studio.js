@@ -9,6 +9,7 @@ const flat = $('flat-preview');
 const partsGrid = $('parts');
 const modelInput = $('model');
 const transformTools = $('transform-tools');
+const basisButtons = document.querySelectorAll('[data-basis]');
 const showProjectsButton = $('show-projects');
 const projectDialog = $('projects');
 const projectControls = $('project-controls');
@@ -32,6 +33,7 @@ const previewRequests = new Map();
 let loadVersion = 0;
 let uploadVersion = 0;
 let mode = 'image';
+let newImageBasis = 'atlas';
 let guide = false;
 let zoom = 1;
 let frame = 0;
@@ -109,8 +111,11 @@ function transact(change) {
 
 function restore(from, to) {
   if (!atlas || !session[from].length) return;
+  const projection = activeForSelection()?.projection;
   session[to].push(snapshot());
   Object.assign(session, session[from].pop());
+  const restored = activeForSelection()?.projection;
+  if (restored !== projection) placing = !!restored;
   sync();
 }
 
@@ -125,6 +130,20 @@ function activeImage() {
 function activeForSelection() {
   const layer = activeImage();
   return layer && layer.parts.some(id => session.selected.has(id)) ? layer : null;
+}
+
+function placementBasis() {
+  const layer = activeForSelection();
+  if (layer) return layer.projection ? 'vehicle' : 'atlas';
+  return session?.model.preview ? newImageBasis : 'atlas';
+}
+
+function syncBasis() {
+  const basis = placementBasis();
+  for (const button of basisButtons) {
+    button.disabled = !atlas || !session.selected.size || button.dataset.basis === 'vehicle' && !session.model.preview;
+    button.setAttribute('aria-pressed', button.dataset.basis === basis);
+  }
 }
 
 function getImageAt(id) {
@@ -349,6 +368,7 @@ function sync(dirty = true) {
     $('rotation').disabled = !editable;
     $('delete-image').disabled = !editable;
   }
+  syncBasis();
   syncPlacement();
   scheduleRender(dirty);
 }
@@ -359,7 +379,7 @@ function syncPlacement() {
   button.hidden = $('views').hidden || !layer;
   const projection = !button.hidden && placing ? layer.projection : null;
   button.setAttribute('aria-pressed', !!projection);
-  button.textContent = projection ? '배치 완료' : '차량에 배치';
+  button.textContent = projection ? '배치 완료' : layer?.projection ? '차량에서 이동' : '차량에 배치';
   vehicle.toggleAttribute('data-placing', !!projection);
   viewer?.setPlacement(projection);
   if (projection) $('orbit').setAttribute('aria-pressed', 'false');
@@ -440,6 +460,40 @@ async function showPreview(prepare = false) {
   }
 }
 
+async function currentProjection() {
+  const target = session;
+  if (!target.model.preview) return null;
+  if ($('views').hidden) await showPreview(true);
+  return atlas && session === target && !$('views').hidden ? viewer.getProjection() : null;
+}
+
+async function chooseBasis(basis) {
+  if (!atlas || !session.selected.size || mode !== 'image') return;
+  const version = ++uploadVersion;
+  const layer = activeForSelection();
+  if (!layer) {
+    newImageBasis = basis;
+    syncBasis();
+    return;
+  }
+  if (basis === placementBasis()) return;
+  const projection = basis === 'vehicle' ? await currentProjection() : null;
+  if (version !== uploadVersion || layer !== activeForSelection() || mode !== 'image') return;
+  const parts = atlas.parts.filter(part => layer.parts.includes(part.id));
+  const replacement = fitLayer(layer.asset, parts, projection);
+  if (basis === 'vehicle' && !replacement.projection) {
+    toast('이 파츠 조합에서는 차량 기준을 사용할 수 없어요.');
+    return;
+  }
+  placing = !!replacement.projection;
+  newImageBasis = basis;
+  transact(() => Object.assign(layer, replacement, { scale: layer.scale, rotation: layer.rotation }));
+  if (mobileLayout.matches) {
+    setMobile(placing ? 'preview' : 'atlas');
+    $('workspace').scrollIntoView({ block: 'start' });
+  }
+}
+
 async function selectModel(model, saved = null) {
   const version = ++loadVersion;
   uploadVersion++;
@@ -470,6 +524,7 @@ async function selectModel(model, saved = null) {
   $('expand-parts').disabled = true;
   for (const id of ['undo', 'redo', 'reset', 'export', 'upload', 'apply-color', 'save-project-button']) $(id).disabled = true;
   $('select-all').disabled = true;
+  syncBasis();
   for (const button of document.querySelectorAll('.swatch')) button.disabled = true;
   atlasContext.clearRect(0, 0, atlasCanvas.width, atlasCanvas.height);
   setZoom(1);
@@ -539,7 +594,7 @@ async function selectModel(model, saved = null) {
   }
 }
 
-async function loadImage(file, onVehicle = false) {
+async function loadImage(file, basis = placementBasis()) {
   if (!file || !atlas || !session.selected.size) return;
   if (!/^image\/(png|jpeg|webp)$/i.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(file.name)) {
     toast('PNG, JPG, WebP 이미지를 선택해 주세요.');
@@ -548,6 +603,7 @@ async function loadImage(file, onVehicle = false) {
   const version = ++uploadVersion;
   const target = session;
   const parts = selectedParts();
+  const onVehicle = basis === 'vehicle';
   const url = URL.createObjectURL(file);
   try {
     const decoded = new Image();
@@ -558,10 +614,8 @@ async function loadImage(file, onVehicle = false) {
     const { canvas, ctx } = surface(Math.max(1, Math.round(decoded.naturalWidth * ratio)), Math.max(1, Math.round(decoded.naturalHeight * ratio)));
     ctx.drawImage(decoded, 0, 0, canvas.width, canvas.height);
     const asset = { image: canvas, name: file.name };
-    if (target.model.preview && (onVehicle || parts.length > 1) && $('views').hidden) await showPreview(true);
+    const projection = onVehicle ? await currentProjection() : null;
     if (session !== target || version !== uploadVersion || !atlas) return;
-    const projection = target.model.preview && (onVehicle || parts.length > 1) ?
-      viewer?.getProjection() : null;
     const layer = fitLayer(asset, parts, projection);
     setSelection(parts.map(part => part.id));
     placing = !!layer.projection;
@@ -570,7 +624,7 @@ async function loadImage(file, onVehicle = false) {
       setMobile(placing ? 'preview' : 'atlas');
       $('workspace').scrollIntoView({ block: 'start' });
     }
-    toast(parts.length + '개 파츠에 이미지를 적용했어요.');
+    toast(onVehicle && !layer.projection ? '이 파츠 조합은 전개도 기준으로 적용했어요.' : parts.length + '개 파츠에 이미지를 적용했어요.');
   } catch {
     if (version === uploadVersion) toast('이미지를 열 수 없어요. 다른 파일을 선택해 주세요.');
   } finally {
@@ -772,6 +826,7 @@ for (const [label, color] of swatchColors) {
   $('swatches').append(button);
 }
 $('apply-color').addEventListener('click', () => paint($('picker').value));
+for (const button of basisButtons) button.addEventListener('click', () => void chooseBasis(button.dataset.basis));
 $('upload').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', event => {
   void loadImage(event.target.files[0]);
@@ -788,7 +843,8 @@ for (const target of [$('upload'), $('atlas-stage'), vehicle]) {
     event.preventDefault();
     $('upload').classList.remove('dragging');
     if (atlas && !session.selected.size) toast('이미지를 넣을 파츠를 먼저 선택해 주세요.');
-    else void loadImage(event.dataTransfer.files[0], target === vehicle);
+    else void loadImage(event.dataTransfer.files[0], target === vehicle ? 'vehicle' :
+      target === $('atlas-stage') ? 'atlas' : placementBasis());
   });
 }
 
@@ -807,15 +863,20 @@ $('fit-image').addEventListener('click', () => {
   if (!layer) return;
   transact(() => Object.assign(layer, fitLayer(layer.asset, selectedParts(), layer.projection)));
 });
-$('apply-image').addEventListener('click', () => {
+$('apply-image').addEventListener('click', async () => {
   const layer = activeImage();
   if (!layer || !session.selected.size) return;
+  const version = ++uploadVersion;
+  const selection = session.selected;
   const parts = selectedParts();
-  const projection = layer.projection || (parts.length > 1 && !$('views').hidden ? viewer.getProjection() : null);
+  const onVehicle = placementBasis() === 'vehicle';
+  const projection = onVehicle ? layer.projection || await currentProjection() : null;
+  if (version !== uploadVersion || layer !== activeImage() || selection !== session.selected || mode !== 'image') return;
   const replacement = fitLayer(layer.asset, parts, projection);
   placing = !!replacement.projection;
   transact(() => replaceSelectedWith(replacement));
   if (placing && mobileLayout.matches) setMobile('preview');
+  if (onVehicle && !replacement.projection) toast('이 파츠 조합은 전개도 기준으로 적용했어요.');
 });
 
 $('place-image').addEventListener('click', () => {
@@ -826,11 +887,7 @@ $('place-image').addEventListener('click', () => {
     syncPlacement();
     return;
   }
-  const parts = atlas.parts.filter(part => layer.parts.includes(part.id));
-  const projected = fitLayer(layer.asset, parts, viewer.getProjection());
-  if (!projected.projection) return;
-  placing = true;
-  transact(() => Object.assign(layer, projected, { scale: layer.scale, rotation: layer.rotation }));
+  void chooseBasis('vehicle');
 });
 
 for (const id of ['scale', 'rotation']) {

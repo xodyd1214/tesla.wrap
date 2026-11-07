@@ -247,6 +247,16 @@ canvas { display: block; max-width: 100%; }
 .tab .icon { width: 14px; height: 14px; }
 .tab[aria-pressed=true] { border-bottom-color: var(--accent); color: var(--accent); font-weight: 650; }
 .tab:hover:not([aria-pressed=true]) { color: var(--ink); }
+.placement-basis {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 9px;
+  border-radius: 9px;
+  background: var(--soft);
+}
+.placement-basis button { flex: 1; padding-inline: 4px; color: var(--muted); }
+.placement-basis button[aria-pressed=true] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 4px #00000015; }
 .upload {
   display: flex;
   align-items: center;
@@ -433,7 +443,7 @@ dialog li + li { margin-top: 9px; }
   .inspector-section + .inspector-section { border-top: 1px solid var(--line); border-left: 0; }
   .parts-grid { max-height: 141px; }
   .part-button, .part-expander, .groups button, .tab, .image-row .round,
-  .preview-footer .round, .view-controls .small-pill, .zoom-group .round, .zoom-value, .image-commands button { min-height: 44px; }
+  .preview-footer .round, .view-controls .small-pill, .zoom-group .round, .zoom-value, .image-commands button, .placement-basis button { min-height: 44px; }
   .part-button { padding-inline: 8px; font-size: 12px; }
   .image-row .round, .preview-footer .round:not(.text-control), .zoom-group .round { width: 44px; }
   .swatches { grid-template-columns: repeat(5, minmax(0, 48px)); }

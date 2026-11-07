@@ -4,6 +4,35 @@ function dot(axis, x, y, z) {
   return axis[0] * x + axis[1] * y + axis[2] * z;
 }
 
+function sample(source, width, height, x, y, output, offset) {
+  if (x < 0 || y < 0 || x >= width || y >= height) {
+    output[offset + 3] = 0;
+    return;
+  }
+  // Interpolate at texel centers and weight colors by opacity to keep clear edges clean.
+  x = Math.max(0, x - .5);
+  y = Math.max(0, y - .5);
+  const col = Math.floor(x);
+  const row = Math.floor(y);
+  const dx = x - col;
+  const dy = y - row;
+  const topLeft = (row * width + col) * 4;
+  const topRight = topLeft + (col < width - 1 ? 4 : 0);
+  const bottomLeft = topLeft + (row < height - 1 ? width * 4 : 0);
+  const bottomRight = bottomLeft + topRight - topLeft;
+  const a = source[topLeft + 3] * (1 - dx) * (1 - dy);
+  const b = source[topRight + 3] * dx * (1 - dy);
+  const c = source[bottomLeft + 3] * (1 - dx) * dy;
+  const d = source[bottomRight + 3] * dx * dy;
+  const alpha = a + b + c + d;
+  output[offset + 3] = alpha;
+  if (!alpha) return;
+  for (let channel = 0; channel < 3; channel++) {
+    output[offset + channel] = (source[topLeft + channel] * a + source[topRight + channel] * b +
+      source[bottomLeft + channel] * c + source[bottomRight + channel] * d) / alpha;
+  }
+}
+
 const frontParts = new Set(['hood', 'bumper-front', 'fender-front-l', 'fender-front-r']);
 export function createFrontProfile(points) {
   let distance = 0;
@@ -168,18 +197,9 @@ export function createSurfaceWrap(atlas, parts, positions, uv, frontProfile) {
         const x = points[offset], y = points[offset + 1], z = points[offset + 2];
         const u = (front ? -x : dot(right, x, y, z)) - layer.x;
         const v = (front ? map.frontRows[pixel] : dot(down, x, y, z)) - layer.y;
-        const sx = Math.floor(u * cos + v * sin + width / 2);
-        const sy = Math.floor(v * cos - u * sin + height / 2);
-        const dest = pixel * 4;
-        if (sx < 0 || sy < 0 || sx >= width || sy >= height) {
-          output.data[dest + 3] = 0;
-          continue;
-        }
-        const src = (sy * width + sx) * 4;
-        output.data[dest] = source[src];
-        output.data[dest + 1] = source[src + 1];
-        output.data[dest + 2] = source[src + 2];
-        output.data[dest + 3] = source[src + 3];
+        const sx = u * cos + v * sin + width / 2;
+        const sy = v * cos - u * sin + height / 2;
+        sample(source, width, height, sx, sy, output.data, pixel * 4);
       }
       stamp.ctx.putImageData(output, 0, 0);
       ctx.drawImage(stamp.canvas, 0, 0, part.width, part.height, 0, 0, part.width, part.height);

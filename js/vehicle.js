@@ -84,7 +84,10 @@ function materialFor(name, original) {
   return dark('#34343b');
 }
 
-function projection(part, x, y, z) {
+function projection(model, part, x, y, z) {
+  // The Highland trunk turns downward at the lip. Depth alone folds the
+  // vertical panel back onto the deck above it.
+  if (model.highland && part === 'trunk') return [x, z - y];
   if (part === 'hood' || part === 'trunk' || part.startsWith('mirror')) return [x, z];
   if (part.startsWith('corner-')) return [-x, -y];
   if (part.startsWith('bumper') || part === 'trim-rear') {
@@ -306,7 +309,7 @@ function prepareCar(source, model) {
         if (!projected.has(part)) projected.set(part, []);
         const entries = projected.get(part);
         for (const [j, id] of indices.entries()) {
-          const uv = projection(part, ...values[j]);
+          const uv = projection(model, part, ...values[j]);
           entries.push({ index: paintPositions.length / 3, u: uv[0], v: uv[1] });
           paintPositions.push(...values[j]);
           paintNormals.push(normal.getX(id), normal.getY(id), normal.getZ(id));
