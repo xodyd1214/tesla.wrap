@@ -85,7 +85,7 @@ function fitLayer(asset, parts, projection = null) {
   return {
     asset, parts: parts.map(part => part.id),
     x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2,
-    fit, projection: null, scale: 100, rotation: 0,
+    fit, projection: null, scale: 100, rotation: 0, uprightInEditor: true,
   };
 }
 
@@ -204,7 +204,9 @@ function drawLayer(ctx, layer, dx = 0, dy = 0) {
   const height = image.height * factor;
   ctx.save();
   ctx.translate(layer.x - dx, layer.y - dy);
-  ctx.rotate(layer.rotation * Math.PI / 180);
+  // Artwork is upright on the rotated editor. Whole-template PNGs and older
+  // projects already use the official orientation of the template pixels.
+  ctx.rotate(layer.rotation * Math.PI / 180 + (layer.uprightInEditor ? Math.PI : 0));
   ctx.drawImage(image, -width / 2, -height / 2, width, height);
   ctx.restore();
 }
@@ -415,7 +417,7 @@ function loadViewer(modelId) {
   let request = previewRequests.get(modelId);
   if (!request) {
     request = {};
-    request.promise = import('./vehicle.js?v=3').then(module => module.createViewer(vehicle, modelId)).then(ready => {
+    request.promise = import('./vehicle.js?v=4').then(module => module.createViewer(vehicle, modelId)).then(ready => {
       request.viewer = ready;
       return ready;
     }).catch(error => {
@@ -488,15 +490,15 @@ async function chooseBasis(basis) {
     toast('이 파츠 조합에서는 차량 맞춤을 사용할 수 없어요.');
     return;
   }
-  const { x, y, fit, scale, rotation, projection: previousProjection } = layer;
-  const alternatePlacement = { x, y, fit, scale, rotation, projection: previousProjection };
+  const { x, y, fit, scale, rotation, projection: previousProjection, uprightInEditor = false } = layer;
+  const alternatePlacement = { x, y, fit, scale, rotation, projection: previousProjection, uprightInEditor };
   if (basis === 'vehicle' && !layer.alternatePlacement) {
     replacement.scale = scale;
     replacement.rotation = rotation;
   }
   placing = !!replacement.projection;
   newImageBasis = basis;
-  transact(() => Object.assign(layer, replacement, { alternatePlacement }));
+  transact(() => Object.assign(layer, { uprightInEditor: false }, replacement, { alternatePlacement }));
   if (mobileLayout.matches) {
     setMobile(placing ? 'preview' : 'atlas');
     $('workspace').scrollIntoView({ block: 'start' });
@@ -662,8 +664,8 @@ async function loadImage(file, basis = placementBasis()) {
 function point(event) {
   const rect = atlasCanvas.getBoundingClientRect();
   return {
-    x: (event.clientX - rect.left) * atlas.width / rect.width,
-    y: (event.clientY - rect.top) * atlas.height / rect.height,
+    x: (rect.right - event.clientX) * atlas.width / rect.width,
+    y: (rect.bottom - event.clientY) * atlas.height / rect.height,
   };
 }
 
@@ -1020,7 +1022,7 @@ function nudgeImage(event) {
   if (!atlas || !direction || !layer || mode !== 'image') return;
   if (layer.projection ? !event.currentTarget.hasAttribute('data-placing') : event.currentTarget !== atlasCanvas) return;
   event.preventDefault();
-  const step = (event.shiftKey ? 20 : 4) * (layer.projection ? viewer.dragScale() : 1);
+  const step = (event.shiftKey ? 20 : 4) * (layer.projection ? viewer.dragScale() : -1);
   transact(() => {
     layer.x += direction[0] * step;
     layer.y += direction[1] * step;

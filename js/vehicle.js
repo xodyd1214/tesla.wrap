@@ -24,7 +24,7 @@ const legacyModel3Panels = {
 // Centerlines are sampled from each mesh, from the windshield down to the bumper lip.
 const previewModels = {
   highland: {
-    file: 'model.glb', length: 4.72, rotation: Math.PI / 2, highland: true,
+    file: 'model.glb', length: 4.72, rotation: Math.PI / 2, highland: true, hoodSlope: .26,
     frontProfile: createFrontProfile([[-1.1, .9], [-1.75, .805], [-2.2, .666], [-2.285, .613], [-2.35, .55], [-2.35, .2]]),
   },
   'model-y': { file: 'model-y.glb', length: 4.75, rotation: -Math.PI / 2, panels: modelYPanels },
@@ -42,7 +42,7 @@ const views = {
   angle: [-5.2, 3.05, -5.9],
   front: [0, 3.9, -7.3],
   side: [-8, 1.65, 0.001],
-  top: [0, 9, 0.005],
+  top: [0, 9, -0.005],
 };
 
 function exteriorPart(x, y, z, ny, outerShell) {
@@ -84,11 +84,12 @@ function materialFor(name, original) {
   return dark('#34343b');
 }
 
-function projection(part, x, y, z) {
+function projection(part, x, y, z, hoodSlope) {
   // Trunk lids turn downward at the lip. Depth alone folds the vertical
   // panel back onto the deck above it.
   if (part === 'trunk') return [x, z - y];
-  if (part === 'hood' || part.startsWith('mirror')) return [x, z];
+  if (part === 'hood') return [x, (z + hoodSlope * y) / Math.hypot(1, hoodSlope)];
+  if (part.startsWith('mirror')) return [x, z];
   if (part.startsWith('corner-')) return [-x, -y];
   if (part.startsWith('bumper') || part === 'trim-rear') {
     return [part === 'bumper-rear' ? -x : x, -y];
@@ -313,7 +314,7 @@ function prepareCar(source, model) {
         if (!projected.has(part)) projected.set(part, []);
         const entries = projected.get(part);
         for (const [j, id] of indices.entries()) {
-          const uv = projection(part, ...values[j]);
+          const uv = projection(part, ...values[j], model.hoodSlope || 0);
           entries.push({ index: paintPositions.length / 3, u: uv[0], v: uv[1] });
           paintPositions.push(...values[j]);
           paintNormals.push(normal.getX(id), normal.getY(id), normal.getZ(id));
@@ -377,14 +378,27 @@ function prepareCar(source, model) {
           top = Math.min(top, v);
           bottom = Math.max(bottom, v);
         }
+        const uSpan = Math.max(.001, right - left);
+        const vSpan = Math.max(.001, bottom - top);
+        // The Highland hood is nearly planar. Use one scale across both axes
+        // instead of stretching the artwork to a different width on every row.
+        const hoodScale = id === 'hood' && model.hoodSlope ? Math.min(
+          .94 * (part.width - 1) / uSpan, .97 * (part.height - 1) / vSpan,
+        ) : 0;
         for (const entry of entries) {
-          const v = (entry.v - top) / Math.max(.001, bottom - top);
-          const u = (entry.u - left) / Math.max(.001, right - left);
-          const row = Math.round((.015 + .97 * v) * (part.height - 1));
-          const [min, max] = part.rows[row];
-          const x = max > min ? min + (max - min) * (.03 + .94 * u) : part.x + part.width / 2;
-          atlasPixels.setXY(entry.index, x - part.x, row);
-          previewUv.setXY(entry.index, (tile.x + x - part.x + .5) / width, 1 - (tile.y + row + .5) / height);
+          let column, row;
+          if (hoodScale) {
+            column = (part.width - 1) / 2 + (entry.u - (left + right) / 2) * hoodScale;
+            row = (part.height - 1) / 2 + (entry.v - (top + bottom) / 2) * hoodScale;
+          } else {
+            const v = (entry.v - top) / vSpan;
+            const u = (entry.u - left) / uSpan;
+            row = Math.round((.015 + .97 * v) * (part.height - 1));
+            const [min, max] = part.rows[row];
+            column = max > min ? min - part.x + (max - min) * (.03 + .94 * u) : part.width / 2;
+          }
+          atlasPixels.setXY(entry.index, column, row);
+          previewUv.setXY(entry.index, (tile.x + column + .5) / width, 1 - (tile.y + row + .5) / height);
         }
       }
       previewUv.needsUpdate = true;
