@@ -60,6 +60,25 @@ export function createPreviewTexture(atlas) {
   return {
     canvas,
     tiles,
+    drawProjection(tile, layer, plane, color) {
+      const { x, y, width, height } = tile;
+      const { image: artwork } = layer.asset;
+      const factor = layer.fit * layer.scale / 100;
+      const scaleX = (width - 1) / plane.width;
+      const scaleY = (height - 1) / plane.height;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y, width, height);
+      ctx.clip();
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, width, height);
+      ctx.translate(x + .5 + (layer.x - plane.left) * scaleX, y + .5 + (layer.y - plane.top) * scaleY);
+      ctx.scale(scaleX * factor, scaleY * factor);
+      ctx.rotate(layer.rotation * Math.PI / 180);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(artwork, -artwork.width / 2, -artwork.height / 2);
+      ctx.restore();
+    },
     update(sourceCanvas) {
       const { data } = sourceCanvas.getContext('2d').getImageData(0, 0, atlas.width, atlas.height);
       const pixels = new Uint32Array(data.buffer);

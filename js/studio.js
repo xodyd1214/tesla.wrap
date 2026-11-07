@@ -233,7 +233,7 @@ function renderTexture() {
   const flatContext = flat.getContext('2d');
   flatContext.clearRect(0, 0, width, height);
   flatContext.drawImage(texture.canvas, 0, 0);
-  if (viewer && session.model.preview) viewer.updateTexture(texture.canvas);
+  if (viewer && session.model.preview) viewer.updateTexture(texture.canvas, session.layers, session.colors);
 }
 
 function selectionOverlay(part) {
@@ -451,7 +451,7 @@ async function showPreview(prepare = false) {
       for (const view of $('views').children) view.setAttribute('aria-pressed', view.dataset.view === 'angle');
     }
     viewer.setAtlas(atlas);
-    viewer.updateTexture(texture.canvas);
+    viewer.updateTexture(texture.canvas, session.layers, session.colors);
     $('preview-message').hidden = true;
     $('views').hidden = false;
     $('orbit').hidden = false;

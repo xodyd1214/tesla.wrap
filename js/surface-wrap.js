@@ -67,6 +67,11 @@ export function frontDistance(profile, x, y, z) {
   return distance;
 }
 
+export function imagePlane(projection, x, y, z) {
+  const { front, right, down } = projection;
+  return front ? [-x, frontDistance(front, x, y, z)] : [dot(right, x, y, z), dot(down, x, y, z)];
+}
+
 // Choose the outside skin where several mesh faces share the same template UV.
 function outsideDepth(id, x, y, z) {
   if (id === 'bumper-front') return -z;
@@ -76,20 +81,18 @@ function outsideDepth(id, x, y, z) {
 }
 
 function surfacePositions(atlas, part, entries, positions, uv) {
-  const { width, height } = part;
-  const size = width * height;
-  const points = new Float32Array(size * 3);
-  const depth = new Float32Array(size).fill(-Infinity);
-  const queue = new Uint32Array(size);
-  let end = 0;
+  const width = Math.max(64, part.width);
+  const height = Math.max(32, part.height);
+  const grid = new Float32Array(width * height * 3);
+  const depth = new Float32Array(width * height).fill(-Infinity);
   for (let i = 0; i < entries.length; i += 3) {
     const [a, b, c] = [entries[i], entries[i + 1], entries[i + 2]].map(entry => entry.index);
-    const x0 = uv.getX(a) * atlas.width - part.x - .5;
-    const y0 = (1 - uv.getY(a)) * atlas.height - part.y - .5;
-    const x1 = uv.getX(b) * atlas.width - part.x - .5;
-    const y1 = (1 - uv.getY(b)) * atlas.height - part.y - .5;
-    const x2 = uv.getX(c) * atlas.width - part.x - .5;
-    const y2 = (1 - uv.getY(c)) * atlas.height - part.y - .5;
+    const x0 = uv.getX(a) * width - .5;
+    const y0 = uv.getY(a) * height - .5;
+    const x1 = uv.getX(b) * width - .5;
+    const y1 = uv.getY(b) * height - .5;
+    const x2 = uv.getX(c) * width - .5;
+    const y2 = uv.getY(c) * height - .5;
     const det = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0);
     if (Math.abs(det) < 1e-6) continue;
     const left = Math.max(0, Math.ceil(Math.min(x0, x1, x2)));
@@ -102,40 +105,79 @@ function surfacePositions(atlas, part, entries, positions, uv) {
         const w2 = ((x1 - x0) * (row - y0) - (y1 - y0) * (col - x0)) / det;
         const w0 = 1 - w1 - w2;
         if (w0 < -1e-5 || w1 < -1e-5 || w2 < -1e-5) continue;
-        if (atlas.lookup[(part.y + row) * atlas.width + part.x + col] !== part.index) continue;
         const x = w0 * positions[a * 3] + w1 * positions[b * 3] + w2 * positions[c * 3];
         const y = w0 * positions[a * 3 + 1] + w1 * positions[b * 3 + 1] + w2 * positions[c * 3 + 1];
         const z = w0 * positions[a * 3 + 2] + w1 * positions[b * 3 + 2] + w2 * positions[c * 3 + 2];
         const pixel = row * width + col;
         const outside = outsideDepth(part.id, x, y, z);
         if (outside <= depth[pixel]) continue;
-        if (depth[pixel] === -Infinity) queue[end++] = pixel;
         depth[pixel] = outside;
-        points[pixel * 3] = x;
-        points[pixel * 3 + 1] = y;
-        points[pixel * 3 + 2] = z;
+        grid[pixel * 3] = x;
+        grid[pixel * 3 + 1] = y;
+        grid[pixel * 3 + 2] = z;
       }
     }
   }
 
-  // Extend the closest mapped surface to masked edges between UV samples.
-  function extend(from, to) {
-    if (depth[to] !== -Infinity) return;
-    const col = to % width;
-    const row = Math.floor(to / width);
-    if (atlas.lookup[(part.y + row) * atlas.width + part.x + col] !== part.index) return;
-    depth[to] = depth[from];
-    points.copyWithin(to * 3, from * 3, from * 3 + 3);
-    queue[end++] = to;
+  // Match each template row to a cross-section of the surface. Interpolate
+  // between measured points across mesh gaps instead of repeating edge pixels.
+  const rows = new Map();
+  for (let y = 0; y < height; y++) {
+    let first = -1;
+    let previous = -1;
+    const start = y * width;
+    for (let x = 0; x < width; x++) {
+      if (depth[start + x] === -Infinity) continue;
+      if (first === -1) first = x;
+      else {
+        for (let missing = previous + 1; missing < x; missing++) {
+          const t = (missing - previous) / (x - previous);
+          for (let axis = 0; axis < 3; axis++) {
+            grid[(start + missing) * 3 + axis] = mix(grid[(start + previous) * 3 + axis], grid[(start + x) * 3 + axis], t);
+          }
+        }
+      }
+      previous = x;
+    }
+    if (first >= 0) rows.set(y, { start, first, last: previous });
   }
-  for (let i = 0; i < end; i++) {
-    const pixel = queue[i];
-    if (pixel % width > 0) extend(pixel, pixel - 1);
-    if (pixel % width < width - 1) extend(pixel, pixel + 1);
-    if (pixel >= width) extend(pixel, pixel - width);
-    if (pixel < size - width) extend(pixel, pixel + width);
+  const points = new Float32Array(part.width * part.height * 3);
+  const pixels = [];
+  if (!rows.size) return { points, pixels };
+
+  const available = [...rows.keys()];
+  let next = 0;
+  for (let y = 0; y < part.height; y++) {
+    const sourceY = (y + .5) * height / part.height - .5;
+    while (next < available.length - 1 && available[next] < sourceY) next++;
+    const y0 = available[Math.max(0, next - 1)];
+    const y1 = available[next];
+    const t = y0 === y1 ? 0 : Math.min(1, (sourceY - y0) / (y1 - y0));
+    const top = rows.get(y0);
+    const bottom = rows.get(y1);
+    const [left, right] = part.rows[y];
+    const start = (part.y + y) * atlas.width + part.x;
+    for (let x = 0; x < part.width; x++) {
+      if (atlas.lookup[start + x] !== part.index) continue;
+      const u = right > left ? Math.max(0, Math.min(1, (part.x + x - left) / (right - left))) : .5;
+      const pixel = y * part.width + x;
+      for (let axis = 0; axis < 3; axis++) {
+        points[pixel * 3 + axis] = mix(rowPoint(grid, top, u, axis), rowPoint(grid, bottom, u, axis), t);
+      }
+      pixels.push(pixel);
+    }
   }
-  return { points, pixels: queue.subarray(0, end) };
+  return { points, pixels };
+}
+
+function mix(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function rowPoint(grid, { start, first, last }, u, axis) {
+  const x = mix(first, last, u);
+  const left = Math.floor(x);
+  return mix(grid[(start + left) * 3 + axis], grid[(start + Math.min(left + 1, last)) * 3 + axis], x - left);
 }
 
 export function createSurfaceWrap(atlas, parts, positions, uv, frontProfile) {
@@ -149,13 +191,12 @@ export function createSurfaceWrap(atlas, parts, positions, uv, frontProfile) {
       const followsFront = frontProfile && selection.every(part => frontParts.has(part.id)) &&
         selection.some(part => part.id === 'hood') && selection.some(part => part.id === 'bumper-front');
       const front = followsFront ? frontProfile : null;
-      const { right, down } = projection;
+      const placement = { ...projection, front };
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
       for (const part of selection) {
         for (const { index } of parts.get(part.id)) {
           const x = positions[index * 3], y = positions[index * 3 + 1], z = positions[index * 3 + 2];
-          const u = front ? -x : dot(right, x, y, z);
-          const v = front ? frontDistance(front, x, y, z) : dot(down, x, y, z);
+          const [u, v] = imagePlane(placement, x, y, z);
           x0 = Math.min(x0, u);
           x1 = Math.max(x1, u);
           y0 = Math.min(y0, v);
