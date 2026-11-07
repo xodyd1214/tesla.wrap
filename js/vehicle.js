@@ -1,5 +1,6 @@
 import { THREE as T, GLTFLoader, MeshoptDecoder, OrbitControls, RoomEnvironment } from '../assets/vendor/three-preview.js';
 import { surface } from './templates.js';
+import { createPreviewTexture } from './preview-texture.js';
 import { createFrontProfile, createSurfaceWrap, frontDistance } from './surface-wrap.js';
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
@@ -187,7 +188,7 @@ function separateSkins(position, index, classify) {
   return i => skins.get(root(i));
 }
 
-function prepareCar(source, texture, model) {
+function prepareCar(source, model) {
   source.updateMatrixWorld(true);
   const bounds = new T.Box3().setFromObject(source);
   const center = bounds.getCenter(new T.Vector3());
@@ -200,7 +201,7 @@ function prepareCar(source, texture, model) {
   const projected = new Map();
   let atlasParts;
   const paintMaterial = new T.MeshPhysicalMaterial({
-    color: '#ffffff', map: texture, roughness: .3, metalness: .12,
+    color: '#ffffff', roughness: .3, metalness: .12,
     clearcoat: .48, clearcoatRoughness: .19, side: T.DoubleSide,
   });
   const paintGeometry = new T.BufferGeometry();
@@ -298,8 +299,10 @@ function prepareCar(source, texture, model) {
   });
   paintGeometry.setAttribute('position', new T.Float32BufferAttribute(paintPositions, 3));
   paintGeometry.setAttribute('normal', new T.Float32BufferAttribute(paintNormals, 3));
-  const uv = new T.Float32BufferAttribute(new Float32Array(paintPositions.length / 3 * 2), 2);
-  paintGeometry.setAttribute('uv', uv);
+  const uvLength = paintPositions.length / 3 * 2;
+  const atlasUv = new T.BufferAttribute(new Float32Array(uvLength), 2);
+  const previewUv = new T.BufferAttribute(new Float32Array(uvLength), 2);
+  paintGeometry.setAttribute('uv', previewUv);
   const paint = new T.Mesh(paintGeometry, paintMaterial);
   car.add(paint);
   const trimGeometry = new T.BufferGeometry();
@@ -318,6 +321,8 @@ function prepareCar(source, texture, model) {
     mapAtlas(atlas) {
       const parts = new Map(atlas.parts.map(part => [part.id, part]));
       atlasParts = parts;
+      const preview = createPreviewTexture(atlas);
+      const { width, height } = preview.canvas;
       const mapped = new Map(projected);
       // Juniper Performance splits the rear bumper tips into separate islands.
       for (const id of ['corner-l', 'corner-r']) {
@@ -328,9 +333,10 @@ function prepareCar(source, texture, model) {
       for (const [id, entries] of mapped) {
         const part = parts.get(id);
         if (!part) {
-          for (const { index } of entries) uv.setXY(index, 0, 0);
+          for (const { index } of entries) previewUv.setXY(index, .5 / width, 1 - .5 / height);
           continue;
         }
+        const tile = preview.tiles.get(id);
         let left = Infinity;
         let right = -Infinity;
         let top = Infinity;
@@ -347,11 +353,26 @@ function prepareCar(source, texture, model) {
           const row = Math.round((.015 + .97 * v) * (part.height - 1));
           const [min, max] = part.rows[row];
           const x = max > min ? min + (max - min) * (.03 + .94 * u) : part.x + part.width / 2;
-          uv.setXY(entry.index, (x + .5) / atlas.width, 1 - (part.y + row + .5) / atlas.height);
+          atlasUv.setXY(entry.index, (x + .5) / atlas.width, 1 - (part.y + row + .5) / atlas.height);
+          previewUv.setXY(entry.index, (tile.x + x - part.x + .5) / width, 1 - (tile.y + row + .5) / height);
         }
       }
-      uv.needsUpdate = true;
-      return createSurfaceWrap(atlas, mapped, paintPositions, uv, model.frontProfile);
+      previewUv.needsUpdate = true;
+      const map = new T.CanvasTexture(preview.canvas);
+      map.colorSpace = T.SRGBColorSpace;
+      // Linear filtering stays inside a tile. Mipmaps would blend neighboring panels.
+      map.minFilter = T.LinearFilter;
+      map.generateMipmaps = false;
+      paintMaterial.map?.dispose();
+      paintMaterial.map = map;
+      paintMaterial.needsUpdate = true;
+      return {
+        ...createSurfaceWrap(atlas, mapped, paintPositions, atlasUv, model.frontProfile),
+        updateTexture(canvas) {
+          preview.update(canvas);
+          map.needsUpdate = true;
+        },
+      };
     },
   };
 }
@@ -401,13 +422,7 @@ export async function createViewer(container, modelId) {
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
 
-    const art = surface(1024, 1024, true);
-    art.ctx.fillStyle = '#ffffff';
-    art.ctx.fillRect(0, 0, 1024, 1024);
-    const texture = new T.CanvasTexture(art.canvas);
-    texture.colorSpace = T.SRGBColorSpace;
-    texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-    const { car, mapAtlas, partAt } = prepareCar(source, texture, model);
+    const { car, mapAtlas, partAt } = prepareCar(source, model);
     const ray = new T.Raycaster();
     scene.add(car);
 
@@ -538,10 +553,7 @@ export async function createViewer(container, modelId) {
         return { xx: right.dot(u), xy: down.dot(u), yx: right.dot(v), yy: down.dot(v) };
       },
       updateTexture(canvas) {
-        art.ctx.fillStyle = '#ffffff';
-        art.ctx.fillRect(0, 0, art.canvas.width, art.canvas.height);
-        art.ctx.drawImage(canvas, 0, 0, art.canvas.width, art.canvas.height);
-        texture.needsUpdate = true;
+        surfaceWrap?.updateTexture(canvas);
         request();
       },
     };

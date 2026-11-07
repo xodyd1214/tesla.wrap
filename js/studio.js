@@ -490,7 +490,7 @@ async function selectModel(model, saved = null) {
     atlasCanvas.height = flat.height = height;
     atlasCanvas.style.aspectRatio = width + ' / ' + height;
     atlasCanvas.style.setProperty('--atlas-ratio', width / height);
-    texture = surface(width, height);
+    texture = surface(width, height, { willReadFrequently: true });
     scratch = surface(width, height);
     overlay = surface(width, height);
     $('dimensions').textContent = width + ' × ' + height;

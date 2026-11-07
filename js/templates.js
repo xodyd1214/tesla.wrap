@@ -36,11 +36,11 @@ export function labelFor(id) {
   return (id.endsWith('-l') ? '왼쪽 ' : '오른쪽 ') + (labels[id.slice(0, -2)] || '패널');
 }
 
-export function surface(width, height, opaque = false) {
+export function surface(width, height, options) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  return { canvas, ctx: canvas.getContext('2d', { alpha: !opaque }) };
+  return { canvas, ctx: canvas.getContext('2d', options) };
 }
 
 export async function loadTemplate(model) {
