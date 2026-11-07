@@ -7,8 +7,8 @@
   <meta name="description" content="Tesla 공식 전개도로 디지털 랩을 만들고, 차량 위에서 미리 확인하세요.">
   <title>Wrap Studio — 테슬라 디지털 랩 편집기</title>
   <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=4">
-  <script type="module" src="./js/studio.js?v=3"></script>
+  <link rel="stylesheet" href="./styles.css?v=5">
+  <script type="module" src="./js/studio.js?v=4"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -46,6 +46,10 @@
           <button id="redo" class="round" type="button" title="다시 실행" aria-label="다시 실행" disabled><svg class="icon"><use href="#i-redo"/></svg></button>
           <button id="reset" class="round" type="button" title="디자인 초기화" aria-label="디자인 초기화" disabled><svg class="icon"><use href="#i-reset"/></svg></button>
         </div>
+        <div class="placement-basis" role="group" aria-label="이미지 배치 기준">
+          <button type="button" class="small-pill" data-basis="atlas" aria-pressed="true" title="전개도에 원본 비율로 배치" disabled>원본 배치</button>
+          <button type="button" class="small-pill" data-basis="vehicle" aria-pressed="false" title="3D 차량에 맞춰 배치" disabled>차량 맞춤</button>
+        </div>
       </div>
       <div class="header-actions">
         <button class="guide-button" id="show-projects" type="button" aria-haspopup="dialog" aria-controls="projects"><svg class="icon"><use href="#i-folder"/></svg><span>내 작업</span></button>
@@ -63,7 +67,6 @@
           <button type="button" data-mobile="atlas" aria-pressed="true">전개도</button>
           <button type="button" data-mobile="preview" aria-pressed="false">차량 프리뷰</button>
         </div>
-        <div id="mobile-basis-slot"></div>
         <section class="pane preview-pane" aria-labelledby="preview-heading">
           <div class="pane-heading">
             <div class="pane-title"><h2 id="preview-heading">차량 프리뷰</h2><span id="preview-badge" class="pane-meta mono">3D</span></div>
@@ -92,18 +95,12 @@
         <section class="pane atlas-pane" aria-labelledby="atlas-heading">
           <div class="pane-heading atlas-toolbar">
             <div class="pane-title"><h2 id="atlas-heading">전개도</h2><span id="dimensions" class="pane-meta mono">1024 × 1024</span></div>
-            <div id="atlas-basis-slot">
-              <div class="placement-basis" id="placement-basis" role="group" aria-label="이미지 배치 기준">
-                <button type="button" class="small-pill" data-basis="atlas" aria-pressed="true" title="전개도에 원본 비율로 배치" disabled>원본 배치</button>
-                <button type="button" class="small-pill" data-basis="vehicle" aria-pressed="false" title="3D 차량에 맞춰 배치" disabled>차량 맞춤</button>
-              </div>
+            <div class="template-tools" role="group" aria-label="차종별 도안 파일">
+              <button id="download-template" class="small-pill secondary" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>빈 도안 다운로드</button>
+              <button id="import-template" class="small-pill secondary" type="button" title="현재 디자인을 교체합니다. 실행 취소로 복원할 수 있어요." disabled><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>작성한 도안 불러오기</button>
+              <input id="template-file" type="file" accept="image/png,.png" hidden>
             </div>
             <button id="guide-toggle" class="round text-control" type="button" aria-pressed="false" title="이미지 겹침 가이드" aria-label="이미지 겹침 가이드"><svg class="icon"><use href="#i-eye"/></svg>가이드</button>
-          </div>
-          <div class="template-tools" role="group" aria-label="차종별 도안 파일">
-            <button id="download-template" class="small-pill secondary" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>빈 도안 다운로드</button>
-            <button id="import-template" class="small-pill secondary" type="button" title="현재 디자인을 교체합니다. 실행 취소로 복원할 수 있어요." disabled><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>작성한 도안 불러오기</button>
-            <input id="template-file" type="file" accept="image/png,.png" hidden>
           </div>
           <div class="stage atlas-stage" id="atlas-stage">
             <div class="atlas-sheet"><canvas id="atlas" tabindex="0" aria-label="전개도. 이미지가 선택된 상태에서 방향키로 이동할 수 있습니다."></canvas></div>
@@ -201,7 +198,7 @@
     <div class="dialog-heading"><div><p class="mono kicker">QUICK GUIDE</p><h2>차량에 랩 적용하기</h2></div><button class="round" type="button" data-close aria-label="가이드 닫기"><svg class="icon"><use href="#i-close"/></svg></button></div>
     <ol>
       <li>실제 차량과 같은 모델을 고르고, 전개도나 목록에서 파츠를 선택하세요.</li>
-      <li>전개도 위의 <strong>원본 배치</strong>는 이미지를 원본 비율로 전개도에 놓고, <strong>차량 맞춤</strong>은 3D 차체에 입힌 이미지를 전개도로 펼칩니다. 두 방식에서 조정한 위치, 크기, 회전은 각각 유지됩니다.</li>
+      <li>상단 바의 <strong>원본 배치</strong>는 이미지를 원본 비율로 전개도에 놓고, <strong>차량 맞춤</strong>은 3D 차체에 입힌 이미지를 전개도로 펼칩니다. 두 방식에서 조정한 위치, 크기, 회전은 각각 유지됩니다.</li>
       <li>외부에서 직접 그리려면 <strong>빈 도안 다운로드</strong>로 해당 차종의 공식 PNG를 받으세요. 캔버스 크기를 유지한 채 흰색 영역에 그리고, <strong>작성한 도안 불러오기</strong>로 같은 차종에 적용하세요. 교체 전 디자인은 실행 취소로 복원할 수 있습니다.</li>
       <li><strong>PNG 내보내기</strong>를 누른 뒤 Tesla 앱의 <strong>Creations → Wrap → Upload</strong>에서 파일을 선택하세요. USB로 옮길 때는 <code>Wraps</code> 폴더에 넣으세요.</li>
       <li>차량에서 <strong>Toybox → Paint Shop → Wraps</strong>를 열어 적용하세요.</li>

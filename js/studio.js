@@ -9,7 +9,6 @@ const flat = $('flat-preview');
 const partsGrid = $('parts');
 const modelInput = $('model');
 const transformTools = $('transform-tools');
-const basisControls = $('placement-basis');
 const basisButtons = document.querySelectorAll('[data-basis]');
 const showProjectsButton = $('show-projects');
 const projectDialog = $('projects');
@@ -1081,12 +1080,11 @@ $('zoom-out').addEventListener('click', () => setZoom(zoom - 0.25));
 $('zoom-in').addEventListener('click', () => setZoom(zoom + 0.25));
 $('zoom-reset').addEventListener('click', () => setZoom(1));
 for (const button of document.querySelectorAll('[data-mobile]')) button.addEventListener('click', () => setMobile(button.dataset.mobile));
-function placeEditorControls() {
+function placeTransformControls() {
   $(mobileLayout.matches ? 'mobile-transform-slot' : 'active-image').append(transformTools);
-  $(mobileLayout.matches ? 'mobile-basis-slot' : 'atlas-basis-slot').append(basisControls);
 }
 mobileLayout.addEventListener('change', () => {
-  placeEditorControls();
+  placeTransformControls();
   void showPreview();
 });
 for (const button of document.querySelectorAll('[data-view]')) {
@@ -1113,5 +1111,5 @@ for (const button of document.querySelectorAll('[data-guide]')) button.addEventL
 document.querySelector('[data-close]').addEventListener('click', () => $('guide').close());
 $('guide').addEventListener('click', event => { if (event.target === $('guide')) $('guide').close(); });
 
-placeEditorControls();
+placeTransformControls();
 void selectModel(models[0]);
