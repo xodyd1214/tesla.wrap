@@ -380,12 +380,12 @@ function syncPlacement() {
   const button = $('place-image');
   const layer = mode === 'image' ? activeForSelection() : null;
   button.hidden = $('views').hidden || !layer;
-  const projection = !button.hidden && placing ? layer.projection : null;
-  button.setAttribute('aria-pressed', !!projection);
-  button.textContent = projection ? '배치 완료' : layer?.projection ? '차량에서 이동' : '차량에 배치';
-  vehicle.toggleAttribute('data-placing', !!projection);
-  viewer?.setPlacement(projection);
-  if (projection) $('orbit').setAttribute('aria-pressed', 'false');
+  const editing = !button.hidden && placing && !!layer.projection;
+  button.setAttribute('aria-pressed', editing);
+  button.textContent = editing ? '배치 완료' : layer?.projection ? '차량에서 이동' : '차량에 배치';
+  vehicle.toggleAttribute('data-placing', editing);
+  viewer?.setImageEditing(editing);
+  if (editing) $('orbit').setAttribute('aria-pressed', 'false');
 }
 
 function setMobile(view) {
@@ -417,7 +417,7 @@ function loadViewer(modelId) {
   let request = previewRequests.get(modelId);
   if (!request) {
     request = {};
-    request.promise = import('./vehicle.js?v=4').then(module => module.createViewer(vehicle, modelId)).then(ready => {
+    request.promise = import('./vehicle.js?v=5').then(module => module.createViewer(vehicle, modelId)).then(ready => {
       request.viewer = ready;
       return ready;
     }).catch(error => {
@@ -969,19 +969,17 @@ atlasCanvas.addEventListener('pointermove', event => {
 
 vehicle.addEventListener('pointerdown', event => {
   if (!atlas || event.button !== 0 || pointer || mode !== 'image' || $('views').hidden) return;
+  if (!vehicle.hasAttribute('data-placing')) return;
   const layer = activeForSelection();
   if (!layer?.projection) return;
-  const placingImage = vehicle.hasAttribute('data-placing');
-  const hit = !placingImage || layer.projection.front ? viewer.hitSurface(event.clientX, event.clientY) : null;
-  const onLayer = layer.parts.includes(hit?.part);
-  if (!placingImage && !onLayer) return;
+  const hit = layer.projection.front ? viewer.hitSurface(event.clientX, event.clientY) : null;
   // Claim this drag before OrbitControls receives the same pointer.
   event.stopPropagation();
   viewer.setOrbit(false);
   $('orbit').setAttribute('aria-pressed', 'false');
   pointer = {
     source: vehicle, id: event.pointerId, start: { x: event.clientX, y: event.clientY },
-    layer, x: layer.x, y: layer.y, axes: viewer.dragAxes(layer.projection, onLayer ? hit.point : null), before: null,
+    layer, x: layer.x, y: layer.y, axes: viewer.dragAxes(layer.projection, layer.parts.includes(hit?.part) ? hit.point : null), before: null,
   };
   vehicle.setPointerCapture(event.pointerId);
 }, true);
@@ -1022,10 +1020,17 @@ function nudgeImage(event) {
   if (!atlas || !direction || !layer || mode !== 'image') return;
   if (layer.projection ? !event.currentTarget.hasAttribute('data-placing') : event.currentTarget !== atlasCanvas) return;
   event.preventDefault();
-  const step = (event.shiftKey ? 20 : 4) * (layer.projection ? viewer.dragScale() : -1);
+  const step = event.shiftKey ? 20 : 4;
+  const [dx, dy] = direction.map(axis => axis * step);
   transact(() => {
-    layer.x += direction[0] * step;
-    layer.y += direction[1] * step;
+    if (layer.projection) {
+      const { xx, xy, yx, yy } = viewer.dragAxes(layer.projection);
+      layer.x += dx * xx + dy * xy;
+      layer.y += dx * yx + dy * yy;
+    } else {
+      layer.x -= dx;
+      layer.y -= dy;
+    }
   });
 }
 
@@ -1090,8 +1095,6 @@ mobileLayout.addEventListener('change', () => {
 for (const button of document.querySelectorAll('[data-view]')) {
   button.addEventListener('click', () => {
     if (!viewer) return;
-    placing = false;
-    syncPlacement();
     viewer.setOrbit(false);
     $('orbit').setAttribute('aria-pressed', 'false');
     viewer.setView(button.dataset.view);

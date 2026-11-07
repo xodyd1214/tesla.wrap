@@ -475,7 +475,6 @@ export async function createViewer(container, modelId) {
     let currentAtlas;
     let currentView;
     let surfaceWrap;
-    let placement;
     let lastTime;
     const request = () => { if (!frame) frame = requestAnimationFrame(draw); };
     function draw(time) {
@@ -565,20 +564,10 @@ export async function createViewer(container, modelId) {
       drawSurfaceLayer(ctx, layer, part) {
         surfaceWrap.draw(ctx, layer, part);
       },
-      setPlacement(projection) {
-        if (placement === projection) return;
-        placement = projection;
-        controls.enabled = !placement;
-        if (!placement) return;
-        controls.autoRotate = false;
-        if (!placement.front) {
-          const distance = camera.position.distanceTo(controls.target);
-          camera.position.fromArray(placement.normal).multiplyScalar(distance).add(controls.target);
-        }
-        controls.update();
-        request();
+      setImageEditing(editing) {
+        controls.enabled = !editing;
+        if (editing) controls.autoRotate = false;
       },
-      dragScale,
       dragAxes(projection, point) {
         const view = getProjection();
         const scale = dragScale();
