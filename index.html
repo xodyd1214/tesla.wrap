@@ -31,6 +31,7 @@
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 1-1 2.2m0 3h.01"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+    <symbol id="i-controls" viewBox="0 0 24 24"><path d="M4 7h5m4 0h7M4 17h9m4 0h3"/><circle cx="11" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></symbol>
   </svg>
 
   <header class="site-header">
@@ -115,7 +116,10 @@
 
         <div id="mobile-transform-slot"></div>
         <aside class="inspector" aria-labelledby="inspector-heading">
-          <div class="pane-heading inspector-heading"><h2 id="inspector-heading">편집 도구</h2></div>
+          <div class="inspector-heading">
+            <svg class="icon" aria-hidden="true"><use href="#i-controls"/></svg>
+            <h2 id="inspector-heading">편집 도구</h2>
+          </div>
           <section class="inspector-section parts-section" aria-labelledby="parts-heading">
             <div class="inspector-title"><h3 id="parts-heading">파츠</h3><span id="count" class="count">0개 선택</span></div>
             <div class="groups">
