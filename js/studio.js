@@ -135,13 +135,14 @@ function activeForSelection() {
 function placementBasis() {
   const layer = activeForSelection();
   if (layer) return layer.projection ? 'vehicle' : 'atlas';
-  return session?.model.preview ? newImageBasis : 'atlas';
+  return session?.model.preview && flat.hidden ? newImageBasis : 'atlas';
 }
 
 function syncBasis() {
   const basis = placementBasis();
   for (const button of basisButtons) {
-    button.disabled = !atlas || !session.selected.size || button.dataset.basis === 'vehicle' && !session.model.preview;
+    button.disabled = !atlas || !session.selected.size ||
+      button.dataset.basis === 'vehicle' && (!session.model.preview || !flat.hidden);
     button.setAttribute('aria-pressed', button.dataset.basis === basis);
   }
 }
@@ -406,6 +407,7 @@ function setFlat(message) {
   $('flat-note').hidden = false;
   $('preview-badge').textContent = '2D';
   $('preview-message').hidden = true;
+  syncBasis();
   syncPlacement();
 }
 
@@ -453,6 +455,7 @@ async function showPreview(prepare = false) {
     $('preview-message').hidden = true;
     $('views').hidden = false;
     $('orbit').hidden = false;
+    syncBasis();
     syncPlacement();
   } catch (error) {
     console.warn('Vehicle preview unavailable', error);
