@@ -83,7 +83,6 @@ canvas { display: block; max-width: 100%; }
 .site-header { position: sticky; top: 12px; z-index: 5; padding-top: 17px; pointer-events: none; }
 .header-inner, .inspector {
   border: 1px solid #00000008;
-  border-radius: 16px;
   background: #ffffffed;
   box-shadow: var(--shadow);
 }
@@ -142,7 +141,7 @@ canvas { display: block; max-width: 100%; }
 .mobile-tabs, #mobile-basis-slot, #mobile-transform-slot { display: none; }
 .preview-pane { grid-area: preview; }
 .atlas-pane { grid-area: atlas; }
-.inspector { grid-area: inspector; align-self: start; }
+.inspector { grid-area: inspector; align-self: start; border-radius: 16px; }
 .pane-heading {
   min-height: 52px;
   display: flex;
@@ -420,7 +419,6 @@ dialog li + li { margin-top: 9px; }
     grid-template-areas: 'brand actions' 'tools tools';
     padding: 4px 7px;
     gap: 0 5px;
-    border-radius: 14px;
   }
   .brand { grid-area: brand; font-size: 15px; }
   .header-actions { grid-area: actions; gap: 3px; }
