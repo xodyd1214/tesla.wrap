@@ -1,4 +1,4 @@
-import { loadTemplate, models, selectionBounds, surface } from './templates.js';
+import { loadTemplate, models, selectionBounds, surface } from './templates.js?v=2';
 import { withProjectStore } from './projects.js';
 
 const $ = id => document.getElementById(id);
@@ -331,6 +331,8 @@ function sync(dirty = true) {
   $('redo').disabled = !session.redo.length;
   $('reset').disabled = !Object.keys(session.colors).length && !session.layers.length;
   $('export').disabled = exporting;
+  $('download-template').disabled = false;
+  $('import-template').disabled = false;
   $('save-project-button').disabled = false;
   for (const button of partsGrid.children) {
     const id = button.dataset.part;
@@ -531,7 +533,7 @@ async function selectModel(model, saved = null) {
   document.querySelector('[data-mobile=preview]').textContent = model.preview ? '3D 프리뷰' : '디자인 프리뷰';
   $('active-image').hidden = true;
   transformTools.hidden = true;
-  for (const id of ['undo', 'redo', 'reset', 'export', 'upload', 'apply-color', 'save-project-button']) $(id).disabled = true;
+  for (const id of ['undo', 'redo', 'reset', 'export', 'download-template', 'import-template', 'upload', 'apply-color', 'save-project-button']) $(id).disabled = true;
   $('select-all').disabled = true;
   syncBasis();
   for (const button of document.querySelectorAll('.swatch')) button.disabled = true;
@@ -603,14 +605,20 @@ async function selectModel(model, saved = null) {
 }
 
 async function loadImage(file, basis = placementBasis()) {
-  if (!file || !atlas || !session.selected.size) return;
-  if (!/^image\/(png|jpeg|webp)$/i.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(file.name)) {
+  const fullTemplate = basis === 'template';
+  if (!file || !atlas || (!fullTemplate && !session.selected.size)) return;
+  if (fullTemplate) {
+    if (file.type !== 'image/png' && !/\.png$/i.test(file.name)) {
+      toast('작성한 도안을 PNG로 저장해 주세요.');
+      return;
+    }
+  } else if (!/^image\/(png|jpeg|webp)$/i.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(file.name)) {
     toast('PNG, JPG, WebP 이미지를 선택해 주세요.');
     return;
   }
   const version = ++uploadVersion;
   const target = session;
-  const parts = selectedParts();
+  const parts = fullTemplate ? atlas.parts : selectedParts();
   const onVehicle = basis === 'vehicle';
   const url = URL.createObjectURL(file);
   try {
@@ -618,21 +626,35 @@ async function loadImage(file, basis = placementBasis()) {
     decoded.src = url;
     await decoded.decode();
     if (session !== target || version !== uploadVersion || !atlas) return;
-    const ratio = Math.min(1, 2048 / Math.max(decoded.naturalWidth, decoded.naturalHeight));
-    const { canvas, ctx } = surface(Math.max(1, Math.round(decoded.naturalWidth * ratio)), Math.max(1, Math.round(decoded.naturalHeight * ratio)));
+    const { naturalWidth: width, naturalHeight: height } = decoded;
+    if (fullTemplate && (width < 512 || height < 512 || width > atlas.width || height > atlas.height ||
+      width * atlas.height !== height * atlas.width)) {
+      toast('이 차종의 빈 도안과 같은 비율로 저장해 주세요. 원본 크기는 ' + atlas.width + ' × ' + atlas.height + '입니다.');
+      return;
+    }
+    const ratio = Math.min(1, 2048 / Math.max(width, height));
+    const { canvas, ctx } = surface(Math.max(1, Math.round(width * ratio)), Math.max(1, Math.round(height * ratio)));
     ctx.drawImage(decoded, 0, 0, canvas.width, canvas.height);
     const asset = { image: canvas, name: file.name };
     const projection = onVehicle ? await currentProjection() : null;
     if (session !== target || version !== uploadVersion || !atlas) return;
-    const layer = fitLayer(asset, parts, projection);
-    setSelection(parts.map(part => part.id));
+    const layer = fullTemplate ? {
+      asset, parts: parts.map(part => part.id), x: atlas.width / 2, y: atlas.height / 2,
+      fit: atlas.width / width, projection: null, scale: 100, rotation: 0,
+    } : fitLayer(asset, parts, projection);
+    setSelection(layer.parts);
     placing = !!layer.projection;
-    transact(() => replaceSelectedWith(layer));
+    transact(() => {
+      if (fullTemplate) session.colors = {};
+      replaceSelectedWith(layer);
+    });
+    if (fullTemplate && mode !== 'image') setTool('image');
     if (mobileLayout.matches) {
       setMobile(placing ? 'preview' : 'atlas');
       $('workspace').scrollIntoView({ block: 'start' });
     }
-    toast(onVehicle && !layer.projection ? '이 파츠 조합에는 원본 배치를 적용했어요.' : parts.length + '개 파츠에 이미지를 적용했어요.');
+    if (fullTemplate) toast('도안을 전체 파츠에 적용했어요. 실행 취소로 이전 작업을 복원할 수 있어요.');
+    else toast(onVehicle && !layer.projection ? '이 파츠 조합에는 원본 배치를 적용했어요.' : parts.length + '개 파츠에 이미지를 적용했어요.');
   } catch {
     if (version === uploadVersion) toast('이미지를 열 수 없어요. 다른 파일을 선택해 주세요.');
   } finally {
@@ -658,6 +680,17 @@ function setZoom(value) {
 
 function blobFor(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PNG encoding failed')), 'image/png'));
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 15_000);
 }
 
 async function saveProject(name) {
@@ -776,14 +809,7 @@ async function exportPNG() {
       blob = await blobFor(reduced.canvas);
     }
     if (blob.size > 1_000_000) throw new Error('PNG exceeds 1 MB');
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'Wrap-' + exportModel.id + '.png';
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 15_000);
+    downloadBlob(blob, 'Wrap-' + exportModel.id + '.png');
     toast('PNG를 저장했어요 · ' + Math.ceil(blob.size / 1000) + ' KB');
   } catch (error) {
     console.warn(error);
@@ -837,6 +863,14 @@ for (const button of basisButtons) button.addEventListener('click', () => {
 $('upload').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', event => {
   void loadImage(event.target.files[0]);
+  event.target.value = '';
+});
+$('download-template').addEventListener('click', () => {
+  if (atlas) downloadBlob(atlas.blank, 'Template-' + session.model.id + '.png');
+});
+$('import-template').addEventListener('click', () => $('template-file').click());
+$('template-file').addEventListener('change', event => {
+  void loadImage(event.target.files[0], 'template');
   event.target.value = '';
 });
 for (const target of [$('upload'), $('atlas-stage'), vehicle]) {

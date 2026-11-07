@@ -154,6 +154,8 @@ canvas { display: block; max-width: 100%; }
 .pane-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .atlas-toolbar { justify-content: start; }
 .atlas-toolbar > .pane-title { flex: 1; }
+.template-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 3px 8px; }
+.template-tools .icon { width: 14px; height: 14px; }
 #atlas-basis-slot:empty { display: none; }
 .pane-heading h2 { font-size: 23px; font-weight: 540; letter-spacing: -.05em; }
 .pane-meta { font-size: 10px; color: var(--muted); white-space: nowrap; }
@@ -462,7 +464,7 @@ dialog li + li { margin-top: 9px; }
   .inspector-section + .inspector-section { border-top: 1px solid var(--line); border-left: 0; }
   .part-button, .groups button, .tab, .image-row .round,
   .preview-footer .round, .view-controls .small-pill, .zoom-group .round, .zoom-value,
-  .image-commands button, .placement-basis button, .custom-color input, .custom-color button { min-height: 44px; }
+  .image-commands button, .placement-basis button, .template-tools button, .custom-color input, .custom-color button { min-height: 44px; }
   .part-button { padding-inline: 8px; font-size: 12px; }
   .image-row .round, .preview-footer .round:not(.text-control), .zoom-group .round { width: 44px; }
   .swatches { grid-template-columns: repeat(5, minmax(0, 48px)); }

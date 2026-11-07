@@ -44,14 +44,17 @@ export function surface(width, height, options) {
 }
 
 export async function loadTemplate(model) {
-  const image = new Image();
-  image.crossOrigin = 'anonymous';
-  image.src = source + '/' + model.id + '/template.png';
-  await image.decode();
-  const width = image.naturalWidth;
-  const height = image.naturalHeight;
+  const response = await fetch(source + '/' + model.id + '/template.png');
+  if (!response.ok) throw new Error('Tesla template download failed');
+  const blank = await response.blob();
+  const image = await createImageBitmap(blank);
+  const { width, height } = image;
   const { ctx } = surface(width, height);
-  ctx.drawImage(image, 0, 0);
+  try {
+    ctx.drawImage(image, 0, 0);
+  } finally {
+    image.close();
+  }
   const { data } = ctx.getImageData(0, 0, width, height);
   const hits = new Uint8Array(width * height);
   for (let i = 0; i < hits.length; i++) {
@@ -157,7 +160,7 @@ export async function loadTemplate(model) {
 
   const partOrder = part => order.includes(part.id) ? order.indexOf(part.id) : order.length;
   const sorted = parts.sort((a, b) => partOrder(a) - partOrder(b));
-  return { width, height, parts: sorted, lookup: expanded, ids };
+  return { width, height, parts: sorted, lookup: expanded, ids, blank };
 }
 
 export function selectionBounds(parts) {
