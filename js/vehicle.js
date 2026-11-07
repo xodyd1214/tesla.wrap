@@ -4,6 +4,7 @@ import { createPreviewTexture } from './preview-texture.js?v=2';
 import { createFrontProfile, createSurfaceWrap, frontDistance } from './surface-wrap.js?v=2';
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
+const highlandRearPanels = new Set(['trunk', 'trim-rear', 'bumper-rear']);
 // Named body islands in the credited 2021 Model Y mesh.
 const modelYPanels = {
   'MY-291': 'mirror-r', 'MY-292': 'mirror-l',
@@ -95,6 +96,66 @@ function projection(part, x, y, z, hoodSlope) {
     return [part === 'bumper-rear' ? -x : x, -y];
   }
   return [part.endsWith('-l') ? y : -y, z];
+}
+
+function highlandRearColumns(atlas, part, entries, left, top, uSpan, vSpan) {
+  const center = (part.width - 1) / 2;
+  const rows = part.rows.map(([min, max], row) => {
+    const maskOffset = (part.y + row) * atlas.width;
+    const target = [[Infinity, -Infinity], [Infinity, -Infinity]];
+    for (let x = min; x <= max; x++) {
+      if (atlas.lookup[maskOffset + x] !== part.index) continue;
+      const column = x - part.x;
+      const range = target[column > center ? 1 : 0];
+      range[0] = Math.min(range[0], column);
+      range[1] = Math.max(range[1], column);
+    }
+    if (!target.every(([start, end]) => start <= end)) return null;
+
+    // Find the corresponding cross section of the mesh by intersecting its
+    // projected triangle edges with this row.
+    const height = T.MathUtils.clamp((row / (part.height - 1) - .015) / .97, .0001, .9999);
+    const v = top + vSpan * height;
+    const source = [[Infinity, -Infinity], [Infinity, -Infinity]];
+    for (let i = 0; i < entries.length; i += 3) {
+      for (let edge = 0; edge < 3; edge++) {
+        const a = entries[i + edge];
+        const b = entries[i + (edge + 1) % 3];
+        if ((a.v < v) === (b.v < v)) continue;
+        const u = (T.MathUtils.lerp(a.u, b.u, (v - a.v) / (b.v - a.v)) - left) / uSpan;
+        const range = source[u > .5 ? 1 : 0];
+        range[0] = Math.min(range[0], u);
+        range[1] = Math.max(range[1], u);
+      }
+    }
+    if (!source.every(([start, end]) => start <= end)) return null;
+
+    // Match the two sides separately when both the mesh and the official
+    // template have a cutout. Mapping across it repeats edge pixels by the lamps.
+    const split = target[1][0] - target[0][1] >= 5 && source[1][0] - source[0][1] >= .035;
+    return { source, target, split };
+  });
+
+  function columnAt(row, u) {
+    const fit = rows[row];
+    if (!fit) {
+      const [min, max] = part.rows[row];
+      return max > min ? min - part.x + (max - min) * (.03 + .94 * u) : part.width / 2;
+    }
+    const { source, target, split } = fit;
+    const first = split && u > .5 ? 1 : 0;
+    const last = split ? first : 1;
+    const start = source[first][0];
+    const end = source[last][1];
+    const position = T.MathUtils.clamp((u - start) / Math.max(.001, end - start), 0, 1);
+    return T.MathUtils.lerp(target[first][0], target[last][1], .02 + .96 * position);
+  }
+
+  return (row, u) => {
+    const a = Math.floor(row);
+    const b = Math.ceil(row);
+    return T.MathUtils.lerp(columnAt(a, u), columnAt(b, u), row - a);
+  };
 }
 
 function highlandSkin([x0, y0, z0, x1, y1, z1]) {
@@ -385,11 +446,16 @@ function prepareCar(source, model) {
         const hoodScale = id === 'hood' && model.hoodSlope ? Math.min(
           .94 * (part.width - 1) / uSpan, .97 * (part.height - 1) / vSpan,
         ) : 0;
+        const rearColumn = model.highland && highlandRearPanels.has(id)
+          ? highlandRearColumns(atlas, part, entries, left, top, uSpan, vSpan) : null;
         for (const entry of entries) {
           let column, row;
           if (hoodScale) {
             column = (part.width - 1) / 2 + (entry.u - (left + right) / 2) * hoodScale;
             row = (part.height - 1) / 2 + (entry.v - (top + bottom) / 2) * hoodScale;
+          } else if (rearColumn) {
+            row = (.015 + .97 * (entry.v - top) / vSpan) * (part.height - 1);
+            column = rearColumn(row, (entry.u - left) / uSpan);
           } else {
             const v = (entry.v - top) / vSpan;
             const u = (entry.u - left) / uSpan;
