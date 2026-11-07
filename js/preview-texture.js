@@ -1,20 +1,15 @@
 import { surface } from './templates.js';
 
-function nearestSolidPixels(atlas, part) {
-  const { width, height } = part;
+export function nearestPixels(width, height, isSeed) {
   const size = width * height;
-  const mask = part.mask.getContext('2d').getImageData(0, 0, width, height).data;
   const source = new Int32Array(size).fill(-1);
   const queue = new Uint32Array(size);
   let end = 0;
 
-  for (let row = 0; row < height; row++) {
-    for (let col = 0; col < width; col++) {
-      const pixel = row * width + col;
-      if (mask[pixel * 4 + 3] !== 255) continue;
-      source[pixel] = (part.y + row) * atlas.width + part.x + col;
-      queue[end++] = pixel;
-    }
+  for (let pixel = 0; pixel < size; pixel++) {
+    if (!isSeed(pixel)) continue;
+    source[pixel] = pixel;
+    queue[end++] = pixel;
   }
 
   function extend(from, to) {
@@ -30,6 +25,14 @@ function nearestSolidPixels(atlas, part) {
     if (pixel < size - width) extend(pixel, pixel + width);
   }
   return source;
+}
+
+function nearestSolidPixels(atlas, part) {
+  const { width, height } = part;
+  const mask = part.mask.getContext('2d').getImageData(0, 0, width, height).data;
+  return nearestPixels(width, height, pixel => mask[pixel * 4 + 3] === 255).map(pixel =>
+    pixel < 0 ? -1 : (part.y + Math.floor(pixel / width)) * atlas.width + part.x + pixel % width,
+  );
 }
 
 // Interpolated mesh UVs can cross gaps in a panel's silhouette. Give each
@@ -60,25 +63,6 @@ export function createPreviewTexture(atlas) {
   return {
     canvas,
     tiles,
-    drawProjection(tile, layer, plane, color) {
-      const { x, y, width, height } = tile;
-      const { image: artwork } = layer.asset;
-      const factor = layer.fit * layer.scale / 100;
-      const scaleX = (width - 1) / plane.width;
-      const scaleY = (height - 1) / plane.height;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(x, y, width, height);
-      ctx.clip();
-      ctx.fillStyle = color;
-      ctx.fillRect(x, y, width, height);
-      ctx.translate(x + .5 + (layer.x - plane.left) * scaleX, y + .5 + (layer.y - plane.top) * scaleY);
-      ctx.scale(scaleX * factor, scaleY * factor);
-      ctx.rotate(layer.rotation * Math.PI / 180);
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(artwork, -artwork.width / 2, -artwork.height / 2);
-      ctx.restore();
-    },
     update(sourceCanvas) {
       const { data } = sourceCanvas.getContext('2d').getImageData(0, 0, atlas.width, atlas.height);
       const pixels = new Uint32Array(data.buffer);

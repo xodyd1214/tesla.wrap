@@ -1,4 +1,5 @@
 import { surface } from './templates.js';
+import { nearestPixels } from './preview-texture.js?v=2';
 
 function dot(axis, x, y, z) {
   return axis[0] * x + axis[1] * y + axis[2] * z;
@@ -80,19 +81,20 @@ function outsideDepth(id, x, y, z) {
   return id.endsWith('-l') ? -x : x;
 }
 
-function surfacePositions(atlas, part, entries, positions, uv) {
-  const width = Math.max(64, part.width);
-  const height = Math.max(32, part.height);
-  const grid = new Float32Array(width * height * 3);
+function surfacePositions(atlas, part, entries, positions, atlasPixels) {
+  const { width, height } = part;
+  const points = new Float32Array(width * height * 3);
   const depth = new Float32Array(width * height).fill(-Infinity);
+  // Invert the same triangle coordinates used to sample the texture in 3D.
+  // These are local canvas pixels, with y increasing from top to bottom.
   for (let i = 0; i < entries.length; i += 3) {
     const [a, b, c] = [entries[i], entries[i + 1], entries[i + 2]].map(entry => entry.index);
-    const x0 = uv.getX(a) * width - .5;
-    const y0 = uv.getY(a) * height - .5;
-    const x1 = uv.getX(b) * width - .5;
-    const y1 = uv.getY(b) * height - .5;
-    const x2 = uv.getX(c) * width - .5;
-    const y2 = uv.getY(c) * height - .5;
+    const x0 = atlasPixels.getX(a);
+    const y0 = atlasPixels.getY(a);
+    const x1 = atlasPixels.getX(b);
+    const y1 = atlasPixels.getY(b);
+    const x2 = atlasPixels.getX(c);
+    const y2 = atlasPixels.getY(c);
     const det = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0);
     if (Math.abs(det) < 1e-6) continue;
     const left = Math.max(0, Math.ceil(Math.min(x0, x1, x2)));
@@ -100,7 +102,9 @@ function surfacePositions(atlas, part, entries, positions, uv) {
     const top = Math.max(0, Math.ceil(Math.min(y0, y1, y2)));
     const bottom = Math.min(height - 1, Math.floor(Math.max(y0, y1, y2)));
     for (let row = top; row <= bottom; row++) {
+      const start = (part.y + row) * atlas.width + part.x;
       for (let col = left; col <= right; col++) {
+        if (atlas.lookup[start + col] !== part.index) continue;
         const w1 = ((col - x0) * (y2 - y0) - (row - y0) * (x2 - x0)) / det;
         const w2 = ((x1 - x0) * (row - y0) - (y1 - y0) * (col - x0)) / det;
         const w0 = 1 - w1 - w2;
@@ -112,75 +116,31 @@ function surfacePositions(atlas, part, entries, positions, uv) {
         const outside = outsideDepth(part.id, x, y, z);
         if (outside <= depth[pixel]) continue;
         depth[pixel] = outside;
-        grid[pixel * 3] = x;
-        grid[pixel * 3 + 1] = y;
-        grid[pixel * 3 + 2] = z;
+        points[pixel * 3] = x;
+        points[pixel * 3 + 1] = y;
+        points[pixel * 3 + 2] = z;
       }
     }
   }
 
-  // Match each template row to a cross-section of the surface. Interpolate
-  // between measured points across mesh gaps instead of repeating edge pixels.
-  const rows = new Map();
-  for (let y = 0; y < height; y++) {
-    let first = -1;
-    let previous = -1;
-    const start = y * width;
-    for (let x = 0; x < width; x++) {
-      if (depth[start + x] === -Infinity) continue;
-      if (first === -1) first = x;
-      else {
-        for (let missing = previous + 1; missing < x; missing++) {
-          const t = (missing - previous) / (x - previous);
-          for (let axis = 0; axis < 3; axis++) {
-            grid[(start + missing) * 3 + axis] = mix(grid[(start + previous) * 3 + axis], grid[(start + x) * 3 + axis], t);
-          }
-        }
-      }
-      previous = x;
-    }
-    if (first >= 0) rows.set(y, { start, first, last: previous });
-  }
-  const points = new Float32Array(part.width * part.height * 3);
+  // The official panel can extend beyond the projected mesh at the edges.
+  // Repeat the nearest covered sample to fill those pixels within the mask.
+  const nearest = nearestPixels(width, height, pixel => depth[pixel] !== -Infinity);
   const pixels = [];
-  if (!rows.size) return { points, pixels };
-
-  const available = [...rows.keys()];
-  let next = 0;
-  for (let y = 0; y < part.height; y++) {
-    const sourceY = (y + .5) * height / part.height - .5;
-    while (next < available.length - 1 && available[next] < sourceY) next++;
-    const y0 = available[Math.max(0, next - 1)];
-    const y1 = available[next];
-    const t = y0 === y1 ? 0 : Math.min(1, (sourceY - y0) / (y1 - y0));
-    const top = rows.get(y0);
-    const bottom = rows.get(y1);
-    const [left, right] = part.rows[y];
+  for (let y = 0; y < height; y++) {
     const start = (part.y + y) * atlas.width + part.x;
-    for (let x = 0; x < part.width; x++) {
-      if (atlas.lookup[start + x] !== part.index) continue;
-      const u = right > left ? Math.max(0, Math.min(1, (part.x + x - left) / (right - left))) : .5;
-      const pixel = y * part.width + x;
-      for (let axis = 0; axis < 3; axis++) {
-        points[pixel * 3 + axis] = mix(rowPoint(grid, top, u, axis), rowPoint(grid, bottom, u, axis), t);
-      }
+    for (let x = 0; x < width; x++) {
+      const pixel = y * width + x;
+      const source = nearest[pixel];
+      if (source < 0 || atlas.lookup[start + x] !== part.index) continue;
+      if (source !== pixel) points.copyWithin(pixel * 3, source * 3, source * 3 + 3);
       pixels.push(pixel);
     }
   }
   return { points, pixels };
 }
 
-function mix(a, b, t) {
-  return a + (b - a) * t;
-}
-
-function rowPoint(grid, { start, first, last }, u, axis) {
-  const x = mix(first, last, u);
-  const left = Math.floor(x);
-  return mix(grid[(start + left) * 3 + axis], grid[(start + Math.min(left + 1, last)) * 3 + axis], x - left);
-}
-
-export function createSurfaceWrap(atlas, parts, positions, uv, frontProfile) {
+export function createSurfaceWrap(atlas, parts, positions, atlasPixels, frontProfile) {
   const maps = new Map();
   const images = new WeakMap();
   const stamp = surface(atlas.width, atlas.height);
@@ -211,8 +171,10 @@ export function createSurfaceWrap(atlas, parts, positions, uv, frontProfile) {
       };
     },
     draw(ctx, layer, part) {
+      const entries = parts.get(part.id);
+      if (!entries) return;
       if (!maps.has(part.id)) {
-        const map = surfacePositions(atlas, part, parts.get(part.id), positions, uv);
+        const map = surfacePositions(atlas, part, entries, positions, atlasPixels);
         maps.set(part.id, { ...map, output: stamp.ctx.createImageData(part.width, part.height) });
       }
       const map = maps.get(part.id);

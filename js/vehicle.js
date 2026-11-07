@@ -1,7 +1,7 @@
 import { THREE as T, GLTFLoader, MeshoptDecoder, OrbitControls, RoomEnvironment } from '../assets/vendor/three-preview.js';
 import { surface } from './templates.js';
-import { createPreviewTexture } from './preview-texture.js';
-import { createFrontProfile, createSurfaceWrap, frontDistance, imagePlane } from './surface-wrap.js';
+import { createPreviewTexture } from './preview-texture.js?v=2';
+import { createFrontProfile, createSurfaceWrap, frontDistance } from './surface-wrap.js?v=2';
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
 // Named body islands in the credited 2021 Model Y mesh.
@@ -215,32 +215,6 @@ function separateSkins(position, index, classify, weld = true) {
   return i => skins.get(root(i));
 }
 
-function projectPreview(entries, positions, projection, tile, uv, textureWidth, textureHeight) {
-  const coords = entries.map(({ index }) => {
-    const offset = index * 3;
-    return imagePlane(projection, positions[offset], positions[offset + 1], positions[offset + 2]);
-  });
-  let left = Infinity;
-  let top = Infinity;
-  let right = -Infinity;
-  let bottom = -Infinity;
-  for (const [u, v] of coords) {
-    left = Math.min(left, u);
-    top = Math.min(top, v);
-    right = Math.max(right, u);
-    bottom = Math.max(bottom, v);
-  }
-  const width = Math.max(.001, right - left);
-  const height = Math.max(.001, bottom - top);
-  for (const [i, { index }] of entries.entries()) {
-    const [u, v] = coords[i];
-    const x = tile.x + .5 + (u - left) / width * (tile.width - 1);
-    const y = tile.y + .5 + (v - top) / height * (tile.height - 1);
-    uv.setXY(index, x / textureWidth, 1 - y / textureHeight);
-  }
-  return { left, top, width, height };
-}
-
 function prepareCar(source, model) {
   source.updateMatrixWorld(true);
   const bounds = new T.Box3().setFromObject(source);
@@ -356,7 +330,7 @@ function prepareCar(source, model) {
   paintGeometry.setAttribute('position', new T.Float32BufferAttribute(paintPositions, 3));
   paintGeometry.setAttribute('normal', new T.Float32BufferAttribute(paintNormals, 3));
   const uvLength = paintPositions.length / 3 * 2;
-  const surfaceUv = new T.BufferAttribute(new Float32Array(uvLength), 2);
+  const atlasPixels = new T.BufferAttribute(new Float32Array(uvLength), 2);
   const previewUv = new T.BufferAttribute(new Float32Array(uvLength), 2);
   paintGeometry.setAttribute('uv', previewUv);
   const paint = new T.Mesh(paintGeometry, paintMaterial);
@@ -409,7 +383,7 @@ function prepareCar(source, model) {
           const row = Math.round((.015 + .97 * v) * (part.height - 1));
           const [min, max] = part.rows[row];
           const x = max > min ? min + (max - min) * (.03 + .94 * u) : part.x + part.width / 2;
-          surfaceUv.setXY(entry.index, u, 1 - v);
+          atlasPixels.setXY(entry.index, x - part.x, row);
           previewUv.setXY(entry.index, (tile.x + x - part.x + .5) / width, 1 - (tile.y + row + .5) / height);
         }
       }
@@ -422,40 +396,11 @@ function prepareCar(source, model) {
       paintMaterial.map?.dispose();
       paintMaterial.map = map;
       paintMaterial.needsUpdate = true;
-      const atlasCoordinates = previewUv.array.slice();
-      const projectionTiles = new Map();
       return {
-        ...createSurfaceWrap(atlas, mapped, paintPositions, surfaceUv, model.frontProfile),
-        updateTexture(canvas, layers, colors) {
+        ...createSurfaceWrap(atlas, mapped, paintPositions, atlasPixels, model.frontProfile),
+        updateTexture(canvas) {
+          // Preview the same template pixels that the editor exports to PNG.
           preview.update(canvas);
-          const projectedParts = new Map();
-          for (const layer of layers) {
-            if (!layer.projection) continue;
-            for (const id of layer.parts) projectedParts.set(id, layer);
-          }
-          // Preview vehicle placements directly from the artwork. Atlas export
-          // still uses the surface map to fit the official template silhouette.
-          for (const [id, layer] of projectedParts) {
-            const tile = preview.tiles.get(id);
-            const entries = mapped.get(id);
-            if (!tile || !entries) continue;
-            let current = projectionTiles.get(id);
-            if (current?.projection !== layer.projection) {
-              const plane = projectPreview(entries, paintPositions, layer.projection, tile, previewUv, width, height);
-              current = { projection: layer.projection, plane };
-              projectionTiles.set(id, current);
-              previewUv.needsUpdate = true;
-            }
-            preview.drawProjection(tile, layer, current.plane, colors[id] || '#ffffff');
-          }
-          for (const id of projectionTiles.keys()) {
-            if (projectedParts.has(id)) continue;
-            for (const { index } of mapped.get(id)) {
-              previewUv.setXY(index, atlasCoordinates[index * 2], atlasCoordinates[index * 2 + 1]);
-            }
-            projectionTiles.delete(id);
-            previewUv.needsUpdate = true;
-          }
           map.needsUpdate = true;
         },
       };
@@ -638,8 +583,8 @@ export async function createViewer(container, modelId) {
         const v = new T.Vector3().fromArray(projection.down);
         return { xx: right.dot(u), xy: down.dot(u), yx: right.dot(v), yy: down.dot(v) };
       },
-      updateTexture(canvas, layers, colors) {
-        surfaceWrap?.updateTexture(canvas, layers, colors);
+      updateTexture(canvas) {
+        surfaceWrap?.updateTexture(canvas);
         request();
       },
     };

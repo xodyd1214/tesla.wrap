@@ -233,7 +233,7 @@ function renderTexture() {
   const flatContext = flat.getContext('2d');
   flatContext.clearRect(0, 0, width, height);
   flatContext.drawImage(texture.canvas, 0, 0);
-  if (viewer && session.model.preview) viewer.updateTexture(texture.canvas, session.layers, session.colors);
+  if (viewer && session.model.preview) viewer.updateTexture(texture.canvas);
 }
 
 function selectionOverlay(part) {
@@ -415,7 +415,7 @@ function loadViewer(modelId) {
   let request = previewRequests.get(modelId);
   if (!request) {
     request = {};
-    request.promise = import('./vehicle.js?v=2').then(module => module.createViewer(vehicle, modelId)).then(ready => {
+    request.promise = import('./vehicle.js?v=3').then(module => module.createViewer(vehicle, modelId)).then(ready => {
       request.viewer = ready;
       return ready;
     }).catch(error => {
@@ -451,7 +451,7 @@ async function showPreview(prepare = false) {
       for (const view of $('views').children) view.setAttribute('aria-pressed', view.dataset.view === 'angle');
     }
     viewer.setAtlas(atlas);
-    viewer.updateTexture(texture.canvas, session.layers, session.colors);
+    viewer.updateTexture(texture.canvas);
     $('preview-message').hidden = true;
     $('views').hidden = false;
     $('orbit').hidden = false;
