@@ -88,6 +88,7 @@ canvas { display: block; max-width: 100%; }
 }
 .header-inner {
   min-height: 60px;
+  border-radius: 16px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -419,6 +420,7 @@ dialog li + li { margin-top: 9px; }
     grid-template-areas: 'brand actions' 'tools tools';
     padding: 4px 7px;
     gap: 0 5px;
+    border-radius: 14px;
   }
   .brand { grid-area: brand; font-size: 15px; }
   .header-actions { grid-area: actions; gap: 3px; }
