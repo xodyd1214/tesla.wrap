@@ -218,18 +218,33 @@ function renderTexture() {
 
 function selectionOverlay(part) {
   if (part.selection) return part.selection;
-  const { canvas, ctx } = surface(part.width + 6, part.height + 6);
-  for (const [x, y] of [[0, 3], [6, 3], [3, 0], [3, 6]]) ctx.drawImage(part.mask, x, y);
+  const { width, height, mask } = part;
+  const { canvas, ctx } = surface(width, height);
+  ctx.drawImage(mask, 0, 0);
   ctx.globalCompositeOperation = 'source-in';
-  ctx.fillStyle = '#343434';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#272727';
+  ctx.fillRect(0, 0, width, height);
+
+  // Inset both strokes so that adjacent selections keep their own edges.
+  const offsets = [[0, -4], [3, -3], [4, 0], [3, 3], [0, 4], [-3, 3], [-4, 0], [-3, -3]];
+  const inset = surface(width, height);
+  inset.ctx.drawImage(mask, 0, 0);
+  inset.ctx.globalCompositeOperation = 'source-in';
+  inset.ctx.fillStyle = '#fff';
+  inset.ctx.fillRect(0, 0, width, height);
+  inset.ctx.globalCompositeOperation = 'destination-in';
+  for (const [x, y] of offsets) inset.ctx.drawImage(mask, x, y);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(inset.canvas, 0, 0);
+
+  for (const [x, y] of offsets) inset.ctx.drawImage(mask, x * 2, y * 2);
   ctx.globalCompositeOperation = 'destination-out';
-  ctx.drawImage(part.mask, 3, 3);
-  const tint = surface(part.width, part.height);
-  tint.ctx.drawImage(part.mask, 0, 0);
+  ctx.drawImage(inset.canvas, 0, 0);
+  const tint = surface(width, height);
+  tint.ctx.drawImage(mask, 0, 0);
   tint.ctx.globalCompositeOperation = 'source-in';
   tint.ctx.fillStyle = 'rgba(112, 112, 112, .18)';
-  tint.ctx.fillRect(0, 0, part.width, part.height);
+  tint.ctx.fillRect(0, 0, width, height);
   part.selection = { outline: canvas, tint: tint.canvas };
   return part.selection;
 }
@@ -261,7 +276,7 @@ function renderAtlas() {
   for (const part of parts) {
     const selection = selectionOverlay(part);
     if (!getImageAt(part.id)) ctx.drawImage(selection.tint, part.x, part.y);
-    ctx.drawImage(selection.outline, part.x - 3, part.y - 3);
+    ctx.drawImage(selection.outline, part.x, part.y);
   }
 }
 
