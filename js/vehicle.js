@@ -5,11 +5,12 @@ import { createFrontProfile, createSurfaceWrap, frontDistance } from './surface-
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
 const highlandContourPanels = new Set([
-  'bumper-front', 'fender-front-l', 'fender-front-r', 'trunk', 'trim-rear', 'bumper-rear',
+  'bumper-front', 'trunk', 'trim-rear', 'bumper-rear',
 ]);
 // The editor splits the shared side island at row 801 of the 1024px template.
 const highlandSideSeam = (801 - 539) / 203;
 const isSideIsland = part => part.startsWith('sill-') || part.startsWith('fender-rear-');
+const hasHighlandAtlasProjection = part => isSideIsland(part) || part.startsWith('door-') || part.startsWith('fender-front-');
 // Named body islands in the credited 2021 Model Y mesh.
 const modelYPanels = {
   'MY-291': 'mirror-r', 'MY-292': 'mirror-l',
@@ -91,7 +92,7 @@ function materialFor(name, original) {
 }
 
 function projection(part, x, y, z, { highland, hoodSlope = 0 }) {
-  if (highland && (isSideIsland(part) || part.startsWith('door-'))) {
+  if (highland && hasHighlandAtlasProjection(part)) {
     const lateral = Math.abs(x) - .85;
     let u, v;
     if (isSideIsland(part)) {
@@ -101,6 +102,14 @@ function projection(part, x, y, z, { highland, hoodSlope = 0 }) {
       const quarter = 21 + 187 * y - 113 * lateral - 2.5 * z;
       u = T.MathUtils.lerp(sill, quarter, T.MathUtils.smoothstep(z, .9, 1.34));
       v = 539 + 203 * z;
+    } else if (part.startsWith('fender-front-')) {
+      // The strip beside the hood is nearly horizontal and turns down toward
+      // the door. Change the projection direction smoothly along its length.
+      const along = z + 1.5;
+      const across = Math.abs(x) - .78;
+      const rise = y - .78;
+      u = 164 - 25 * along + (184 + 35 * along) * rise - (132 - 145 * along) * across;
+      v = 483 + 202 * z;
     } else if (part.startsWith('door-front-')) {
       u = 42 + 202 * y - 5 * z;
       v = 511 + 201 * z;
@@ -121,11 +130,6 @@ function projection(part, x, y, z, { highland, hoodSlope = 0 }) {
     // This island runs from the lower lip to the headlights in the PNG.
     // Give the corners room for artwork as the bumper curves back to the wheels.
     return [x + Math.sign(x) * .3 * Math.max(0, z + 2.25), y];
-  }
-  if (highland && part.startsWith('fender-front-')) {
-    // Unfold the top next to the hood together with the vertical wheel arch.
-    const across = y - Math.abs(x);
-    return [part.endsWith('-l') ? across : -across, z];
   }
   if (part.startsWith('bumper') || part === 'trim-rear') {
     return [part === 'bumper-rear' ? -x : x, -y];
@@ -151,7 +155,6 @@ function highlandSideTiles(atlas) {
 
 function highlandPanelColumns(atlas, part, entries, left, top, uSpan, vSpan) {
   const center = (part.width - 1) / 2;
-  const narrowFender = part.id.startsWith('fender-front-');
   const hasBothSides = ranges => ranges.every(([start, end]) => start <= end);
   const rows = part.rows.map(([min, max], row) => {
     const maskOffset = (part.y + row) * atlas.width;
@@ -163,7 +166,7 @@ function highlandPanelColumns(atlas, part, entries, left, top, uSpan, vSpan) {
       range[0] = Math.min(range[0], column);
       range[1] = Math.max(range[1], column);
     }
-    if (narrowFender ? min > max : !hasBothSides(target)) return null;
+    if (!hasBothSides(target)) return null;
 
     // Find the corresponding cross section of the mesh by intersecting its
     // projected triangle edges with this row.
@@ -181,12 +184,11 @@ function highlandPanelColumns(atlas, part, entries, left, top, uSpan, vSpan) {
         range[1] = Math.max(range[1], u);
       }
     }
-    if (narrowFender ? source.every(([start, end]) => start > end) : !hasBothSides(source)) return null;
+    if (!hasBothSides(source)) return null;
 
     // Match the two sides separately when both the mesh and the official
     // template have a cutout. Mapping across it repeats edge pixels by the lamps.
-    const split = hasBothSides(target) && hasBothSides(source) &&
-      target[1][0] - target[0][1] >= 5 && source[1][0] - source[0][1] >= .035;
+    const split = target[1][0] - target[0][1] >= 5 && source[1][0] - source[0][1] >= .035;
     return { source, target, split };
   });
 
@@ -533,7 +535,7 @@ function prepareCar(source, model) {
         }
         const tilePart = sideTiles.get(id) || part;
         const tile = preview.tiles.get(tilePart.id);
-        if (model.highland && (sideTiles.has(id) || id.startsWith('door-'))) {
+        if (model.highland && hasHighlandAtlasProjection(id)) {
           for (const { index, u, v } of entries) {
             const column = T.MathUtils.clamp(u * atlas.width / 1024 - tilePart.x, 0, tile.width - 1);
             const row = T.MathUtils.clamp(v * atlas.height / 1024 - tilePart.y, 0, tile.height - 1);
