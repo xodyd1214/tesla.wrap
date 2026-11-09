@@ -1,5 +1,6 @@
 import { loadTemplate, matchingModel3Templates, models, selectionBounds, surface } from './templates.js?v=4';
 import { withProjectStore } from './projects.js';
+import { createDrawingBoard } from './drawing.js?v=1';
 
 const $ = id => document.getElementById(id);
 const atlasCanvas = $('atlas');
@@ -43,6 +44,16 @@ let placing = false;
 let sliderEdit;
 let exporting = false;
 let toastTimer;
+
+const drawingBoard = createDrawingBoard($('drawing-board'), {
+  commit(part, image) {
+    transact(() => {
+      if (image) session.drawings[part.id] = image;
+      else delete session.drawings[part.id];
+    });
+  },
+  preview: () => scheduleRender(),
+});
 
 function toast(message) {
   $('toast').textContent = message;
@@ -92,6 +103,7 @@ function fitLayer(asset, parts, projection = null) {
 function snapshot(design = session) {
   return {
     colors: { ...design.colors },
+    drawings: { ...design.drawings },
     layers: design.layers.map(layer => ({ ...layer, parts: [...layer.parts] })),
     active: design.active,
   };
@@ -211,7 +223,7 @@ function drawLayer(ctx, layer, dx = 0, dy = 0) {
   ctx.restore();
 }
 
-function renderTexture() {
+function renderTexture(includeDraft = true) {
   const { width, height, parts } = atlas;
   if (viewer && session.model.preview) viewer.setAtlas(atlas, session.model.id);
   texture.ctx.clearRect(0, 0, width, height);
@@ -227,6 +239,8 @@ function renderTexture() {
     const layer = getImageAt(part.id);
     if (layer?.projection) viewer.drawSurfaceLayer(ctx, layer, part);
     else if (layer) drawLayer(ctx, layer, part.x, part.y);
+    const drawing = (includeDraft && drawingBoard.draft(part)) || session.drawings[part.id];
+    if (drawing) ctx.drawImage(drawing, 0, 0);
     ctx.globalCompositeOperation = 'destination-in';
     ctx.drawImage(part.mask, 0, 0);
     ctx.restore();
@@ -330,7 +344,7 @@ function sync(dirty = true) {
   $('upload').disabled = !session.selected.size;
   $('undo').disabled = !session.undo.length;
   $('redo').disabled = !session.redo.length;
-  $('reset').disabled = !Object.keys(session.colors).length && !session.layers.length;
+  $('reset').disabled = !Object.keys(session.colors).length && !session.layers.length && !Object.keys(session.drawings).length;
   $('export').disabled = exporting;
   $('download-template').disabled = false;
   $('import-template').disabled = false;
@@ -373,6 +387,8 @@ function sync(dirty = true) {
   }
   syncBasis();
   syncPlacement();
+  const drawingPart = session.selected.size === 1 ? selectedParts()[0] : null;
+  drawingBoard.show(drawingPart, drawingPart && session.drawings[drawingPart.id]);
   scheduleRender(dirty);
 }
 
@@ -509,6 +525,7 @@ async function selectModel(model, saved = null) {
   const version = ++loadVersion;
   uploadVersion++;
   atlas = null;
+  drawingBoard.show(null);
   pointer = null;
   placing = false;
   sliderEdit = null;
@@ -560,7 +577,7 @@ async function selectModel(model, saved = null) {
       ])) : {};
       const layers = firstVisit ? [fitLayer(demoImage(), [initial])] : [];
       sessions.set(model.id, {
-        model, atlas: layout, selected: new Set([initial.id]), colors, layers,
+        model, atlas: layout, selected: new Set([initial.id]), colors, layers, drawings: {},
         active: layers.length - 1, undo: [], redo: [],
       });
     }
@@ -680,7 +697,10 @@ async function loadImage(file, basis = placementBasis()) {
     setSelection(layer.parts);
     placing = !!layer.projection;
     transact(() => {
-      if (fullTemplate) session.colors = {};
+      if (fullTemplate) {
+        session.colors = {};
+        session.drawings = {};
+      }
       replaceSelectedWith(layer);
     });
     if (fullTemplate && mode !== 'image') setTool('image');
@@ -734,10 +754,29 @@ async function saveProject(name) {
   const selected = [...session.selected];
   const assets = [...new Set(design.layers.map(layer => layer.asset))];
   const layers = design.layers.map(({ asset, ...layer }) => ({ ...layer, asset: assets.indexOf(asset) }));
-  const images = await Promise.all(assets.map(async asset => ({ name: asset.name, blob: await blobFor(asset.image) })));
-  const project = { ...design, layers, images, name, modelId, selected, savedAt: Date.now() };
+  const [images, drawingEntries] = await Promise.all([
+    Promise.all(assets.map(async asset => ({ name: asset.name, png: await pngBytes(asset.image) }))),
+    Promise.all(Object.entries(design.drawings).map(async ([part, image]) => [part, await pngBytes(image)])),
+  ]);
+  const project = { ...design, layers, drawings: Object.fromEntries(drawingEntries), images, name, modelId, selected, savedAt: Date.now() };
   const id = await withProjectStore('readwrite', store => store.add(project));
   return { id, ...project };
+}
+
+async function pngBytes(image) {
+  return (await blobFor(image)).arrayBuffer();
+}
+
+async function canvasFromPng(data) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: 'image/png' });
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const { canvas, ctx } = surface(bitmap.width, bitmap.height);
+    ctx.drawImage(bitmap, 0, 0);
+    return canvas;
+  } finally {
+    bitmap.close();
+  }
 }
 
 async function openProject(id) {
@@ -753,21 +792,16 @@ async function openProject(id) {
     }
   }
   const layout = sessions.get(model.id)?.atlas || await loadTemplate(model);
-  const assets = await Promise.all(saved.images.map(async ({ name, blob }) => {
-    const bitmap = await createImageBitmap(blob);
-    try {
-      const { canvas, ctx } = surface(bitmap.width, bitmap.height);
-      ctx.drawImage(bitmap, 0, 0);
-      return { name, image: canvas };
-    } finally {
-      bitmap.close();
-    }
-  }));
+  const [assets, drawingEntries] = await Promise.all([
+    Promise.all(saved.images.map(async ({ name, png, blob }) => ({ name, image: await canvasFromPng(png ?? blob) }))),
+    Promise.all(Object.entries(saved.drawings || {}).map(async ([part, png]) => [part, await canvasFromPng(png)])),
+  ]);
   if (!projectDialog.open) return;
   modelInput.value = model.id;
   await selectModel(model, {
     atlas: layout, colors: saved.colors, selected: new Set(saved.selected), active: saved.active,
     layers: saved.layers.map(layer => ({ ...layer, asset: assets[layer.asset] })),
+    drawings: Object.fromEntries(drawingEntries),
   });
   projectDialog.close();
   toast('‘' + saved.name + '’ 작업을 열었어요.');
@@ -828,7 +862,7 @@ async function exportPNG() {
   const { width } = atlas;
   const height = exportModel.id === 'cybertruck' ? width : atlas.height;
   const source = surface(width, height);
-  renderTexture();
+  renderTexture(false);
   source.ctx.drawImage(texture.canvas, 0, 0, width, height);
   exporting = true;
   $('export').disabled = true;
@@ -1077,6 +1111,7 @@ $('reset').addEventListener('click', () => {
   if (!atlas) return;
   transact(() => {
     session.colors = {};
+    session.drawings = {};
     session.layers = [];
     session.active = -1;
   });
