@@ -1,4 +1,4 @@
-import { loadTemplate, models, selectionBounds, surface } from './templates.js?v=2';
+import { loadTemplate, models, selectionBounds, surface } from './templates.js?v=3';
 import { withProjectStore } from './projects.js';
 
 const $ = id => document.getElementById(id);
@@ -417,7 +417,7 @@ function loadViewer(modelId) {
   let request = previewRequests.get(modelId);
   if (!request) {
     request = {};
-    request.promise = import('./vehicle.js?v=10').then(module => module.createViewer(vehicle, modelId)).then(ready => {
+    request.promise = import('./vehicle.js?v=11').then(module => module.createViewer(vehicle, modelId)).then(ready => {
       request.viewer = ready;
       return ready;
     }).catch(error => {

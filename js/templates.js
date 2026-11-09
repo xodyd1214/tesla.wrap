@@ -123,7 +123,10 @@ export async function loadTemplate(model) {
       (i % width > 0 && lookup[i - 1]) || (i % width < width - 1 && lookup[i + 1]) || 0;
   }
 
-  const parts = ids.map((id, index) => ({ id, index: index + 1, label: labelFor(id), x: width, y: height, right: 0, bottom: 0 }));
+  const parts = ids.map((id, index) => {
+    const labelId = model.preview === 'juniper' && id.startsWith('sill-') ? 'pillar-rear-' + id.slice(-1) : id;
+    return { id, index: index + 1, label: labelFor(labelId), x: width, y: height, right: 0, bottom: 0 };
+  });
   for (let i = 0; i < expanded.length; i++) {
     const part = parts[expanded[i] - 1];
     if (!part) continue;
