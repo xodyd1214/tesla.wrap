@@ -1,4 +1,4 @@
-import { loadTemplate, models, selectionBounds, surface } from './templates.js?v=3';
+import { loadTemplate, matchingModel3Templates, models, selectionBounds, surface } from './templates.js?v=4';
 import { withProjectStore } from './projects.js';
 
 const $ = id => document.getElementById(id);
@@ -603,6 +603,23 @@ async function selectModel(model, saved = null) {
   }
 }
 
+function chooseTemplateModel(matches) {
+  const dialog = $('template-match');
+  $('template-match-options').replaceChildren(...matches.map(model => {
+    const button = document.createElement('button');
+    button.type = 'submit';
+    button.className = 'pill primary';
+    button.value = model.id;
+    button.textContent = model.name + ' · ' + model.variant;
+    return button;
+  }));
+  dialog.returnValue = '';
+  return new Promise(resolve => {
+    dialog.addEventListener('close', () => resolve(matches.find(model => model.id === dialog.returnValue)), { once: true });
+    dialog.showModal();
+  });
+}
+
 async function loadImage(file, basis = placementBasis()) {
   const fullTemplate = basis === 'template';
   if (!file || !atlas || (!fullTemplate && !session.selected.size)) return;
@@ -634,6 +651,20 @@ async function loadImage(file, basis = placementBasis()) {
       const expected = target.model.id === 'cybertruck' ? '정사각형이거나 빈 도안과 같은 비율의' : '빈 도안과 같은 비율의';
       toast(expected + ' PNG를 선택해 주세요. 빈 도안은 ' + atlas.width + ' × ' + atlas.height + '입니다.');
       return;
+    }
+    if (fullTemplate) {
+      const matches = await matchingModel3Templates(decoded, target.model, atlas);
+      if (session !== target || version !== uploadVersion || !atlas) return;
+      if (matches.length) {
+        const model = await chooseTemplateModel(matches);
+        if (!model || session !== target || version !== uploadVersion) return;
+        modelInput.value = model.id;
+        const switching = selectModel(model);
+        const switchVersion = uploadVersion;
+        await switching;
+        if (switchVersion === uploadVersion && session.model === model && atlas) await loadImage(file, basis);
+        return;
+      }
     }
     const ratio = Math.min(1, 2048 / Math.max(width, height));
     const { canvas, ctx } = squareCybertruck ? surface(atlas.width, atlas.height) :

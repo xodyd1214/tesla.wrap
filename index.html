@@ -7,8 +7,8 @@
   <meta name="description" content="Tesla 공식 전개도로 디지털 랩을 만들고, 차량 위에서 미리 확인하세요.">
   <title>Wrap Studio — 테슬라 디지털 랩 편집기</title>
   <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=8">
-  <script type="module" src="./js/studio.js?v=17"></script>
+  <link rel="stylesheet" href="./styles.css?v=9">
+  <script type="module" src="./js/studio.js?v=18"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -181,6 +181,15 @@
   </main>
 
   <dialog id="preview-fullscreen" aria-labelledby="preview-heading"></dialog>
+
+  <dialog id="template-match" aria-labelledby="template-match-heading" aria-describedby="template-match-note">
+    <div class="dialog-heading"><h2 id="template-match-heading">도안에 맞는 차종 선택</h2></div>
+    <p class="dialog-note" id="template-match-note">PNG의 파츠 배치가 현재 차량의 도안과 달라요. 아래에서 차종을 선택하면 해당 차량의 디자인을 이 PNG로 교체합니다.</p>
+    <form method="dialog" class="template-match-actions">
+      <div id="template-match-options"></div>
+      <button class="pill secondary" type="submit" value="" autofocus>취소</button>
+    </form>
+  </dialog>
 
   <dialog id="projects" aria-labelledby="projects-heading" aria-describedby="projects-note">
     <div class="dialog-heading">

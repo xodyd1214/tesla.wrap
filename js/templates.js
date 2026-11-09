@@ -43,10 +43,14 @@ export function surface(width, height, options) {
   return { canvas, ctx: canvas.getContext('2d', options) };
 }
 
-export async function loadTemplate(model) {
+async function fetchTemplate(model) {
   const response = await fetch(source + '/' + model.id + '/template.png');
   if (!response.ok) throw new Error('Tesla template download failed');
-  const blank = await response.blob();
+  return response.blob();
+}
+
+export async function loadTemplate(model) {
+  const blank = await fetchTemplate(model);
   const image = await createImageBitmap(blank);
   const { width, height } = image;
   const { ctx } = surface(width, height);
@@ -164,6 +168,63 @@ export async function loadTemplate(model) {
   const partOrder = part => order.includes(part.id) ? order.indexOf(part.id) : order.length;
   const sorted = parts.sort((a, b) => partOrder(a) - partOrder(b));
   return { width, height, parts: sorted, lookup: expanded, ids, blank };
+}
+
+const footprintSize = 96;
+
+function footprint(image, isBlank = false) {
+  const { ctx } = surface(footprintSize, footprintSize);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(image, 0, 0, footprintSize, footprintSize);
+  const { data } = ctx.getImageData(0, 0, footprintSize, footprintSize);
+  const mask = new Uint8Array(footprintSize ** 2);
+  for (let i = 0; i < mask.length; i++) {
+    mask[i] = +(data[i * 4 + 3] > 128 && (!isBlank || data[i * 4] > 180));
+  }
+  return mask;
+}
+
+function footprintOverlap(art, template) {
+  let overlap = 0;
+  let union = 0;
+  for (let i = 0; i < art.length; i++) {
+    overlap += art[i] & template[i];
+    union += art[i] | template[i];
+  }
+  return overlap / union;
+}
+
+// Model 3 and Highland templates have the same PNG dimensions. Use their
+// transparent footprints to flag a different layout when the match is clear.
+export async function matchingModel3Templates(image, current, atlas) {
+  if (!current.id.startsWith('model3')) return [];
+  const art = footprint(image);
+  const coverage = art.reduce((sum, pixel) => sum + pixel, 0) / art.length;
+  if (coverage < .2 || coverage > .8) return [];
+
+  const mask = art.map((_, i) => {
+    const x = Math.floor((i % footprintSize + .5) * atlas.width / footprintSize);
+    const y = Math.floor((Math.floor(i / footprintSize) + .5) * atlas.height / footprintSize);
+    return +Boolean(atlas.lookup[y * atlas.width + x]);
+  });
+  const currentScore = footprintOverlap(art, mask);
+  if (currentScore >= .8) return [];
+
+  const candidates = models.filter(model => model !== current && model.id.startsWith('model3'));
+  const results = await Promise.allSettled(candidates.map(async model => {
+    const blank = await createImageBitmap(await fetchTemplate(model));
+    try {
+      return { model, score: footprintOverlap(art, footprint(blank, true)) };
+    } finally {
+      blank.close();
+    }
+  }));
+  const matches = results.filter(result => result.status === 'fulfilled')
+    .map(result => result.value)
+    .filter(match => match.score >= .87 && match.score - currentScore >= .13)
+    .sort((a, b) => b.score - a.score);
+  const best = matches[0]?.score;
+  return matches.filter(match => best - match.score <= .05).map(match => match.model);
 }
 
 export function selectionBounds(parts) {
