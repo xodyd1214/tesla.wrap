@@ -174,6 +174,9 @@ canvas { display: block; max-width: 100%; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .live i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .preview-actions { display: flex; align-items: center; gap: 10px; }
+#expand-preview, #close-preview { border-color: var(--line); border-radius: 999px; color: var(--muted); }
+#close-preview, #preview-fullscreen #expand-preview { display: none; }
+#preview-fullscreen #close-preview { display: inline-flex; }
 #place-image { min-height: 32px; border: 1px solid var(--line); border-radius: 999px; font-weight: 600; }
 .stage { position: relative; height: var(--stage-height); overflow: hidden; border-radius: 15px; isolation: isolate; }
 .preview-stage:has(#flat-preview:not([hidden])) { background: var(--soft); }
@@ -395,6 +398,28 @@ input[type=range]::-moz-range-thumb {
 
 dialog { border: 1px solid var(--line); border-radius: 14px; max-width: min(540px, calc(100% - 28px)); padding: 24px; color: var(--ink); }
 dialog::backdrop { background: #17171773; }
+html:has(#preview-fullscreen[open]) { overflow: hidden; }
+#preview-fullscreen {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: var(--canvas);
+}
+#preview-fullscreen .preview-pane { display: flex; flex-direction: column; height: 100%; }
+#preview-fullscreen .pane-heading {
+  min-height: 56px;
+  padding: 6px clamp(14px, 2.5vw, 36px);
+  border-bottom: 1px solid var(--line);
+}
+#preview-fullscreen .preview-stage { flex: 1; min-height: 0; height: auto; aspect-ratio: auto; border-radius: 0; }
 .dialog-heading { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
 .dialog-heading h2 { font-size: 24px; letter-spacing: -.04em; }
 dialog ol { padding-left: 22px; }
@@ -485,6 +510,8 @@ dialog li + li { margin-top: 9px; }
   .pane-heading h2 { font-size: 18px; }
   .pane-heading .round { height: 44px; }
   .pane-heading .round:not(.text-control) { width: 44px; }
+  .preview-actions { gap: 6px; }
+  .preview-actions .live { display: none; }
   .stage { height: auto; aspect-ratio: 1; }
   .atlas-sheet { inset: 9px; }
   .pane-footer { padding: 4px 8px; }

@@ -1085,6 +1085,21 @@ $('zoom-out').addEventListener('click', () => setZoom(zoom - 0.25));
 $('zoom-in').addEventListener('click', () => setZoom(zoom + 0.25));
 $('zoom-reset').addEventListener('click', () => setZoom(1));
 for (const button of document.querySelectorAll('[data-mobile]')) button.addEventListener('click', () => setMobile(button.dataset.mobile));
+
+const previewPane = $('preview-pane');
+const previewDialog = $('preview-fullscreen');
+const previewSibling = previewPane.nextElementSibling;
+const expandPreview = $('expand-preview');
+expandPreview.addEventListener('click', () => {
+  previewDialog.append(previewPane);
+  previewDialog.showModal();
+});
+$('close-preview').addEventListener('click', () => previewDialog.close());
+previewDialog.addEventListener('close', () => {
+  previewSibling.before(previewPane);
+  expandPreview.focus({ preventScroll: true });
+});
+
 function placeTransformControls() {
   $(mobileLayout.matches ? 'mobile-transform-slot' : 'active-image').append(transformTools);
 }
