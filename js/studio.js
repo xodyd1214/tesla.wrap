@@ -213,7 +213,7 @@ function drawLayer(ctx, layer, dx = 0, dy = 0) {
 
 function renderTexture() {
   const { width, height, parts } = atlas;
-  if (viewer && session.model.preview) viewer.setAtlas(atlas);
+  if (viewer && session.model.preview) viewer.setAtlas(atlas, session.model.id);
   texture.ctx.clearRect(0, 0, width, height);
   const ctx = scratch.ctx;
   for (const part of parts) {
@@ -417,7 +417,7 @@ function loadViewer(modelId) {
   let request = previewRequests.get(modelId);
   if (!request) {
     request = {};
-    request.promise = import('./vehicle.js?v=9').then(module => module.createViewer(vehicle, modelId)).then(ready => {
+    request.promise = import('./vehicle.js?v=10').then(module => module.createViewer(vehicle, modelId)).then(ready => {
       request.viewer = ready;
       return ready;
     }).catch(error => {
@@ -452,7 +452,7 @@ async function showPreview(prepare = false) {
     if (viewer.mount()) {
       for (const view of $('views').children) view.setAttribute('aria-pressed', view.dataset.view === 'angle');
     }
-    viewer.setAtlas(atlas);
+    viewer.setAtlas(atlas, current.model.id);
     viewer.updateTexture(texture.canvas);
     $('preview-message').hidden = true;
     $('views').hidden = false;

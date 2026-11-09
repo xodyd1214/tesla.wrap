@@ -2,7 +2,16 @@
 
 The preview mesh is based on **2024 Tesla Model 3** by [RBLXSupercars](https://sketchfab.com/RBLXSupercars). It is licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). The embedded metadata links to the [original model](https://sketchfab.com/3d-models/2024-tesla-model-3-fd22be415215453693d67e33aa7812d0). The download listing was uploaded by [brandonleong28](https://sketchfab.com/3d-models/tesla-model-3-2024-36c52f3f89f6439c90310f14e8ff33f2).
 
-The mesh comes from the [Tesla Studio conversion](https://github.com/aditano/tesla-studio/tree/main/public/models/highland), which applies lossless mesh compression and separates the source textures. Wrap Studio applies its own paint materials and approximate projection from the official wrap template in the browser. The preview uses the same mesh for both Highland trims.
+The mesh comes from the [Tesla Studio conversion](https://github.com/aditano/tesla-studio/tree/main/public/models/highland), which applies lossless mesh compression and separates the source textures. Wrap Studio separates the paint and trim surfaces from this mesh into `highland-wrap.glb` and adds two UV sets for the [Tesla templates](https://github.com/teslamotors/custom-wraps), Standard / Premium in `TEXCOORD_0` and Performance in `TEXCOORD_1`. Both trims use the same body geometry.
+
+To rebuild the paint asset, serve the project directory and run the following in the browser console at the editor page. Save the download as `assets/models/highland-wrap.glb`.
+
+```js
+const { bakeHighlandWrap } = await import('./scripts/highland-uv.mjs')
+const url = URL.createObjectURL(new Blob([await bakeHighlandWrap()]))
+const link = Object.assign(document.createElement('a'), { href: url, download: 'highland-wrap.glb' })
+link.click()
+```
 
 # 2021 Tesla Model Y
 
