@@ -417,7 +417,7 @@ function loadViewer(modelId) {
   let request = previewRequests.get(modelId);
   if (!request) {
     request = {};
-    request.promise = import('./vehicle.js?v=11').then(module => module.createViewer(vehicle, modelId)).then(ready => {
+    request.promise = import('./vehicle.js?v=12').then(module => module.createViewer(vehicle, modelId)).then(ready => {
       request.viewer = ready;
       return ready;
     }).catch(error => {

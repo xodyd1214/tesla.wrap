@@ -1,5 +1,5 @@
 import { THREE as T, GLTFLoader, MeshoptDecoder } from '../assets/vendor/three-preview.js';
-import { writeWrapGlb, loadWrapEncoder } from './wrap-glb.mjs';
+import { writeWrapGlb, loadWrapEncoder, scanRows } from './wrap-glb.mjs';
 import { loadTemplate, models } from '../js/templates.js';
 import { highlandBody, highlandPaintShells, separateSkins, vehicleGeometry, vehicleTransform } from '../js/vehicle.js';
 
@@ -113,7 +113,9 @@ function sidePixels(part, x, y, z) {
   const offset = Math.abs(x) - .85;
   let u, v;
   if (isSideIsland(part)) {
-    const sill = 17 + 182 * y + 105 * offset - 9 * z;
+    // The lower rocker folds under the car. Use height for its visible
+    // cross section so the fold does not map back across the outer face.
+    const sill = 17 + 182 * y - 9 * z;
     const quarter = 21 + 187 * y - 113 * offset - 2.5 * z;
     u = T.MathUtils.lerp(sill, quarter, T.MathUtils.smoothstep(z, .9, 1.34));
     v = 539 + 203 * z;
@@ -127,10 +129,34 @@ function sidePixels(part, x, y, z) {
     u = 42 + 202 * y - 5 * z;
     v = 511 + 201 * z;
   } else {
-    u = 49 + 200 * y - 71 * offset - 11 * z;
+    u = 49 + 200 * y - 11 * z;
     v = 514 + 204 * z;
   }
   return [part.endsWith('-l') ? u : 1023 - u, v];
+}
+
+function fitSillWidth(part, vertices, mask) {
+  const raw = ([x, y, z]) => sidePixels(part, x, y, z);
+  const { y: top, height } = mask;
+  const rows = scanRows(vertices.map(raw), height, v => v - top);
+  const fits = rows.map(([start, end], row) => {
+    const [left, right] = mask.rows[row];
+    if (end - start < 1 || right - left < 2) return null;
+    const scale = (right - left - 1) / (end - start);
+    return [scale, left + .5 - start * scale];
+  });
+
+  // Match the rocker cross sections to the cutout. Fade out the correction
+  // as the strip widens into the rear quarter, where the chart is shared.
+  return vertex => {
+    const [u, v] = raw(vertex);
+    const row = T.MathUtils.clamp(v - top, 0, height - 1);
+    const before = fits[Math.floor(row)];
+    const after = fits[Math.ceil(row)];
+    const at = fit => fit ? fit[0] * u + fit[1] : u;
+    const column = before && after ? T.MathUtils.lerp(at(before), at(after), row % 1) : at(before || after);
+    return [T.MathUtils.lerp(column, u, T.MathUtils.smoothstep(vertex[2], .73, 1.03)), v];
+  };
 }
 
 function project(part, [x, y, z], mask, shape) {
@@ -235,6 +261,7 @@ export async function bakeHighlandWrap() {
     chart(part, vertices, atlas) {
       const mask = atlas.parts.find(mask => mask.id === part);
       if (!mask) throw new Error('Missing Highland template part: ' + part);
+      if (part.startsWith('sill-')) return { part, project: fitSillWidth(part, vertices, mask) };
       const shape = shapeOf(part, vertices);
       return { part, project: vertex => project(part, vertex, mask, shape) };
     },

@@ -1,7 +1,7 @@
 import { THREE as T, GLTFLoader, MeshoptDecoder } from '../assets/vendor/three-preview.js';
 import { loadTemplate, models } from '../js/templates.js';
 import { previewModels, separateSkins, vehicleGeometry, vehicleTransform } from '../js/vehicle.js';
-import { loadWrapEncoder, writeWrapGlb } from './wrap-glb.mjs';
+import { loadWrapEncoder, scanRows, writeWrapGlb } from './wrap-glb.mjs';
 
 // Named body islands in the credited 2021 Model Y mesh.
 const modelYPanels = {
@@ -123,26 +123,6 @@ function surfacePoint(family, part, [x, y, z]) {
   return [side * (y - .23 * Math.abs(x)), z];
 }
 
-// Record projected silhouette widths. Scan each triangle edge only across
-// the rows it crosses so dense subdivided shells can be authored offline.
-function scanRows(points, height, rowAt) {
-  const rows = Array.from({ length: height }, () => [Infinity, -Infinity]);
-  for (let i = 0; i < points.length; i += 3) {
-    for (let edge = 0; edge < 3; edge++) {
-      const [u0, v0] = points[i + edge];
-      const [u1, v1] = points[i + (edge + 1) % 3];
-      const a = rowAt(v0), b = rowAt(v1);
-      if (a === b) continue;
-      for (let row = Math.max(0, Math.ceil(Math.min(a, b))); row <= Math.min(height - 1, Math.floor(Math.max(a, b))); row++) {
-        const u = T.MathUtils.lerp(u0, u1, (row - a) / (b - a));
-        rows[row][0] = Math.min(rows[row][0], u);
-        rows[row][1] = Math.max(rows[row][1], u);
-      }
-    }
-  }
-  return rows;
-}
-
 function fitChart(vertices, mask, project, { planar = false, matchWidth = false, offset = true } = {}) {
   const points = vertices.map(project);
   let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity;
@@ -199,6 +179,29 @@ function fitChart(vertices, mask, project, { planar = false, matchWidth = false,
       T.MathUtils.lerp(left, right, .02 + .96 * clamp((u - a) / (b - a), 0, 1)) :
       xCenter + (u - uc) * xScale + (offset ? shift : 0);
     return [column, mask.y + row];
+  };
+}
+
+function legacyRockerChart(vertices, mask, project, side) {
+  const rocker = [];
+  const vertical = vertex => side === 'l' ? vertex[1] : -vertex[1];
+  for (let i = 0; i < vertices.length; i += 3) {
+    const triangle = vertices.slice(i, i + 3);
+    if (!triangle.every(([x, y, z]) => Math.abs(x) > .7 && y < .4 && z < 1.14)) continue;
+    rocker.push(...triangle.map(vertex => [vertical(vertex), project(vertex)[1]]));
+  }
+  const rows = scanRows(rocker, mask.height, v => v - mask.y);
+  return vertex => {
+    const [column, v] = project(vertex);
+    const [, y, z] = vertex;
+    const weight = (1 - T.MathUtils.smoothstep(z, .72, 1.04)) * (1 - T.MathUtils.smoothstep(y, .32, .4));
+    if (!weight) return [column, v];
+    const row = Math.round(v - mask.y);
+    const [lo, hi] = rows[row];
+    const [left, right] = mask.rows[row];
+    if (hi - lo < .001 || right - left < 2) return [column, v];
+    const u = clamp((vertical(vertex) - lo) / (hi - lo), 0, 1);
+    return [T.MathUtils.lerp(column, T.MathUtils.lerp(left + .5, right - .5, u), weight), v];
   };
 }
 
@@ -285,6 +288,11 @@ function chartFor(family, role, vertices, atlas, template) {
     fitChart(vertices, mask, project, {
       planar: role === 'hood', matchWidth, offset: role.endsWith('-l') || role.endsWith('-r'),
     });
+  // The original Model 3 includes its rocker in the rear quarter's atlas
+  // island. Fit the thin strip from the visible height under both doors.
+  if (family === 'model-3' && role.startsWith('fender-rear-')) {
+    return { part, project: legacyRockerChart(vertices, mask, uv, side) };
+  }
   return { part, project: uv };
 }
 

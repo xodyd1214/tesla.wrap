@@ -10,12 +10,12 @@ const modelYTaillightNodes = new Set(['MY-318', 'MY-319', 'MY-320', 'MY-321', 'M
 // Centerlines are sampled from each mesh, from the windshield down to the bumper lip.
 export const previewModels = {
   highland: {
-    ...highlandBody, wrapFile: 'highland-wrap.glb?v=1',
+    ...highlandBody, wrapFile: 'highland-wrap.glb?v=2',
     frontProfile: createFrontProfile([[-1.1, .9], [-1.75, .805], [-2.2, .666], [-2.285, .613], [-2.35, .55], [-2.35, .2]]),
   },
   'model-y': { file: 'model-y.glb', length: 4.75, rotation: -Math.PI / 2, wrapFile: 'model-y-wrap.glb?v=1' },
   'model-3': {
-    file: 'model-3.glb', length: 4.69, wrapFile: 'model-3-wrap.glb?v=1',
+    file: 'model-3.glb', length: 4.69, wrapFile: 'model-3-wrap.glb?v=2',
     hiddenMesh: 'Charge_Cap_GLOBAL001',
     frontProfile: createFrontProfile([[-1.38, .88], [-1.85, .81], [-2.1, .72], [-2.25, .64], [-2.34, .55], [-2.34, .16]]),
   },

@@ -1,3 +1,24 @@
+// Record projected silhouette widths. Scan each triangle edge only across
+// the rows it crosses so dense subdivided shells can be authored offline.
+export function scanRows(points, height, rowAt) {
+  const rows = Array.from({ length: height }, () => [Infinity, -Infinity]);
+  for (let i = 0; i < points.length; i += 3) {
+    for (let edge = 0; edge < 3; edge++) {
+      const [u0, v0] = points[i + edge];
+      const [u1, v1] = points[i + (edge + 1) % 3];
+      const a = rowAt(v0), b = rowAt(v1);
+      if (a === b) continue;
+      for (let row = Math.max(0, Math.ceil(Math.min(a, b))); row <= Math.min(height - 1, Math.floor(Math.max(a, b))); row++) {
+        const t = (row - a) / (b - a);
+        const u = (1 - t) * u0 + t * u1;
+        rows[row][0] = Math.min(rows[row][0], u);
+        rows[row][1] = Math.max(rows[row][1], u);
+      }
+    }
+  }
+  return rows;
+}
+
 export async function loadWrapEncoder() {
   const { MeshoptEncoder } = await import('https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_encoder.module.js');
   await MeshoptEncoder.ready;
