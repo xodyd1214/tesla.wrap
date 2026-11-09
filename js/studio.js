@@ -626,20 +626,25 @@ async function loadImage(file, basis = placementBasis()) {
     await decoded.decode();
     if (session !== target || version !== uploadVersion || !atlas) return;
     const { naturalWidth: width, naturalHeight: height } = decoded;
-    if (fullTemplate && (width < 512 || height < 512 || width > atlas.width || height > atlas.height ||
-      width * atlas.height !== height * atlas.width)) {
-      toast('이 차종의 빈 도안과 같은 비율로 저장해 주세요. 원본 크기는 ' + atlas.width + ' × ' + atlas.height + '입니다.');
+    // Tesla's Cybertruck examples use the square version of its rectangular
+    // blank. Both represent the same positions in normalized coordinates.
+    const squareCybertruck = fullTemplate && target.model.id === 'cybertruck' && width === height;
+    const matchesTemplate = width * atlas.height === height * atlas.width && height <= atlas.height;
+    if (fullTemplate && (width < 512 || height < 512 || width > atlas.width || !(matchesTemplate || squareCybertruck))) {
+      const expected = target.model.id === 'cybertruck' ? '정사각형이거나 빈 도안과 같은 비율의' : '빈 도안과 같은 비율의';
+      toast(expected + ' PNG를 선택해 주세요. 빈 도안은 ' + atlas.width + ' × ' + atlas.height + '입니다.');
       return;
     }
     const ratio = Math.min(1, 2048 / Math.max(width, height));
-    const { canvas, ctx } = surface(Math.max(1, Math.round(width * ratio)), Math.max(1, Math.round(height * ratio)));
+    const { canvas, ctx } = squareCybertruck ? surface(atlas.width, atlas.height) :
+      surface(Math.max(1, Math.round(width * ratio)), Math.max(1, Math.round(height * ratio)));
     ctx.drawImage(decoded, 0, 0, canvas.width, canvas.height);
     const asset = { image: canvas, name: file.name };
     const projection = onVehicle ? await currentProjection() : null;
     if (session !== target || version !== uploadVersion || !atlas) return;
     const layer = fullTemplate ? {
       asset, parts: parts.map(part => part.id), x: atlas.width / 2, y: atlas.height / 2,
-      fit: atlas.width / width, projection: null, scale: 100, rotation: 0,
+      fit: atlas.width / canvas.width, projection: null, scale: 100, rotation: 0,
     } : fitLayer(asset, parts, projection);
     setSelection(layer.parts);
     placing = !!layer.projection;
@@ -789,10 +794,11 @@ function projectRow({ id, name, modelId, savedAt }) {
 async function exportPNG() {
   if (!atlas || exporting) return;
   const exportModel = session.model;
-  const { width, height } = atlas;
+  const { width } = atlas;
+  const height = exportModel.id === 'cybertruck' ? width : atlas.height;
   const source = surface(width, height);
   renderTexture();
-  source.ctx.drawImage(texture.canvas, 0, 0);
+  source.ctx.drawImage(texture.canvas, 0, 0, width, height);
   exporting = true;
   $('export').disabled = true;
   try {
