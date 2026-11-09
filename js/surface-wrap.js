@@ -1,5 +1,5 @@
 import { surface } from './templates.js';
-import { nearestPixels } from './preview-texture.js?v=2';
+import { nearestPixels } from './preview-texture.js?v=3';
 
 function dot(axis, x, y, z) {
   return axis[0] * x + axis[1] * y + axis[2] * z;

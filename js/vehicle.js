@@ -1,12 +1,15 @@
 import { THREE as T, GLTFLoader, MeshoptDecoder, OrbitControls, RoomEnvironment } from '../assets/vendor/three-preview.js';
-import { surface } from './templates.js';
-import { createPreviewTexture } from './preview-texture.js?v=2';
-import { createFrontProfile, createSurfaceWrap, frontDistance } from './surface-wrap.js?v=2';
+import { selectionBounds, surface } from './templates.js';
+import { createPreviewTexture } from './preview-texture.js?v=3';
+import { createFrontProfile, createSurfaceWrap, frontDistance } from './surface-wrap.js?v=3';
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
 const highlandContourPanels = new Set([
   'bumper-front', 'fender-front-l', 'fender-front-r', 'trunk', 'trim-rear', 'bumper-rear',
 ]);
+// The editor splits the shared side island at row 801 of the 1024px template.
+const highlandSideSeam = (801 - 539) / 203;
+const isSideIsland = part => part.startsWith('sill-') || part.startsWith('fender-rear-');
 // Named body islands in the credited 2021 Model Y mesh.
 const modelYPanels = {
   'MY-291': 'mirror-r', 'MY-292': 'mirror-l',
@@ -88,6 +91,26 @@ function materialFor(name, original) {
 }
 
 function projection(part, x, y, z, { highland, hoodSlope = 0 }) {
+  if (highland && (isSideIsland(part) || part.startsWith('door-'))) {
+    const lateral = Math.abs(x) - .85;
+    let u, v;
+    if (isSideIsland(part)) {
+      // Keep the sill and the inward curve of the quarter in one island,
+      // with a fixed scale along the length of the car.
+      const sill = 17 + 182 * y + 105 * lateral - 9 * z;
+      const quarter = 21 + 187 * y - 113 * lateral - 2.5 * z;
+      u = T.MathUtils.lerp(sill, quarter, T.MathUtils.smoothstep(z, .9, 1.34));
+      v = 539 + 203 * z;
+    } else if (part.startsWith('door-front-')) {
+      u = 42 + 202 * y - 5 * z;
+      v = 511 + 201 * z;
+    } else {
+      // Follow the slanted rear door without pulling each row to the full arch.
+      u = 49 + 200 * y - 71 * lateral - 11 * z;
+      v = 514 + 204 * z;
+    }
+    return [part.endsWith('-l') ? u : 1023 - u, v];
+  }
   // Trunk lids turn downward at the lip. Depth alone folds the vertical
   // panel back onto the deck above it.
   if (part === 'trunk') return [x, z - y];
@@ -108,6 +131,22 @@ function projection(part, x, y, z, { highland, hoodSlope = 0 }) {
     return [part === 'bumper-rear' ? -x : x, -y];
   }
   return [part.endsWith('-l') ? y : -y, z];
+}
+
+function highlandSideTiles(atlas) {
+  const tiles = new Map();
+  for (const side of ['l', 'r']) {
+    const panels = ['sill-' + side, 'fender-rear-' + side].map(id => atlas.parts.find(part => part.id === id));
+    if (!panels.every(Boolean)) continue;
+    const bounds = selectionBounds(panels);
+    const { canvas, ctx } = surface(bounds.width, bounds.height);
+    for (const part of panels) {
+      ctx.drawImage(part.mask, part.x - bounds.x, part.y - bounds.y);
+    }
+    const tile = { ...bounds, mask: canvas, id: panels[0].id };
+    for (const part of panels) tiles.set(part.id, tile);
+  }
+  return tiles;
 }
 
 function highlandPanelColumns(atlas, part, entries, left, top, uSpan, vSpan) {
@@ -210,11 +249,45 @@ function highlandShellSkin([x0, y0, z0, x1, y1, z1]) {
     (halfWidth > .75 || halfWidth > .37 && y0 > .54 && y1 < .58)) return 'bumper-rear';
   if (innerX > .65 && y0 < .18 && y1 > .77 && z0 > 1.67 && z0 < 1.69 && z1 > 2.15) return 'bumper-rear';
   if (innerX > .68 && y0 > .14 && y1 < .25 && z0 > 1.77 && z1 > 2.06 && z1 < 2.08) return 'bumper-rear';
+  // The rocker, its lower bevel, and the wheel-arch lip are separate meshes
+  // from the doors. Keep them in the same continuous side island.
+  if (innerX > .70 && z0 > -1.10 && z0 < -1.07 && y0 < .16 &&
+    (z1 > 2.04 && z1 < 2.06 || z1 > .98 && z1 < 1.01 && y1 < .17)) return 'sill-' + side;
+  if (innerX > .84 && z0 > .98 && z0 < 1.14 && z1 > 1.12 && z1 < 1.66 &&
+    y0 < .60 && y1 < .70) return 'fender-rear-' + side;
   // The upper quarter panels run alongside the rear glass and trunk deck.
   if (innerX > .57 && y0 > .92 && y1 > 1.12 && z0 > 1.25 && z0 < 1.55 && z1 > 1.87 && z1 < 2.06) {
     return 'fender-rear-' + side;
   }
   return null;
+}
+
+function addHighlandSide(triangle, side, addTriangle) {
+  if (triangle.every(vertex => vertex[2] <= highlandSideSeam)) {
+    addTriangle('sill-' + side, triangle);
+    return;
+  }
+  if (triangle.every(vertex => vertex[2] >= highlandSideSeam)) {
+    addTriangle('fender-rear-' + side, triangle);
+    return;
+  }
+  // A 3D triangle can cross the logical cut in the editor. Split it at the
+  // same point so picking and vehicle-fit projection use the correct part.
+  for (const [part, sign] of [['sill-', -1], ['fender-rear-', 1]]) {
+    const distance = triangle.map(vertex => (vertex[2] - highlandSideSeam) * sign);
+    const polygon = [];
+    for (let i = 0; i < 3; i++) {
+      const j = (i + 1) % 3;
+      if (distance[i] >= 0) polygon.push(triangle[i]);
+      if (distance[i] * distance[j] < 0) {
+        const t = distance[i] / (distance[i] - distance[j]);
+        polygon.push(triangle[i].map((value, axis) => T.MathUtils.lerp(value, triangle[j][axis], t)));
+      }
+    }
+    for (let i = 1; i + 1 < polygon.length; i++) {
+      addTriangle(part + side, [polygon[0], polygon[i], polygon[i + 1]]);
+    }
+  }
 }
 
 function legacyModel3Skin(name) {
@@ -326,6 +399,18 @@ function prepareCar(source, model) {
   let modelYHeadlights;
   let modelYTaillights;
 
+  function addPaintTriangle(part, triangle) {
+    paintParts.push(part);
+    if (!projected.has(part)) projected.set(part, []);
+    const entries = projected.get(part);
+    for (const [x, y, z, nx, ny, nz] of triangle) {
+      const [u, v] = projection(part, x, y, z, model);
+      entries.push({ index: paintPositions.length / 3, u, v });
+      paintPositions.push(x, y, z);
+      paintNormals.push(nx, ny, nz);
+    }
+  }
+
   source.traverse(object => {
     // The legacy asset's separate charge flap protrudes from the closed body.
     if (!object.isMesh || object.name === model.hiddenMesh) return;
@@ -393,15 +478,9 @@ function prepareCar(source, model) {
         part = x < 0 ? 'corner-l' : 'corner-r';
       }
       if (part) {
-        paintParts.push(part);
-        if (!projected.has(part)) projected.set(part, []);
-        const entries = projected.get(part);
-        for (const [j, id] of indices.entries()) {
-          const uv = projection(part, ...values[j], model);
-          entries.push({ index: paintPositions.length / 3, u: uv[0], v: uv[1] });
-          paintPositions.push(...values[j]);
-          paintNormals.push(normal.getX(id), normal.getY(id), normal.getZ(id));
-        }
+        const triangle = indices.map((id, j) => [...values[j], normal.getX(id), normal.getY(id), normal.getZ(id)]);
+        if (model.highland && isSideIsland(part)) addHighlandSide(triangle, part.slice(-1), addPaintTriangle);
+        else addPaintTriangle(part, triangle);
       } else {
         for (const [j, id] of indices.entries()) {
           trimPositions.push(...values[j]);
@@ -435,7 +514,9 @@ function prepareCar(source, model) {
     mapAtlas(atlas) {
       const parts = new Map(atlas.parts.map(part => [part.id, part]));
       atlasParts = parts;
-      const preview = createPreviewTexture(atlas);
+      const sideTiles = model.highland ? highlandSideTiles(atlas) : new Map();
+      const previewParts = new Set(atlas.parts.map(part => sideTiles.get(part.id) || part));
+      const preview = createPreviewTexture(atlas, previewParts);
       const { width, height } = preview.canvas;
       const mapped = new Map(projected);
       // Juniper Performance splits the rear bumper tips into separate islands.
@@ -450,7 +531,17 @@ function prepareCar(source, model) {
           for (const { index } of entries) previewUv.setXY(index, .5 / width, 1 - .5 / height);
           continue;
         }
-        const tile = preview.tiles.get(id);
+        const tilePart = sideTiles.get(id) || part;
+        const tile = preview.tiles.get(tilePart.id);
+        if (model.highland && (sideTiles.has(id) || id.startsWith('door-'))) {
+          for (const { index, u, v } of entries) {
+            const column = T.MathUtils.clamp(u * atlas.width / 1024 - tilePart.x, 0, tile.width - 1);
+            const row = T.MathUtils.clamp(v * atlas.height / 1024 - tilePart.y, 0, tile.height - 1);
+            atlasPixels.setXY(index, column + tilePart.x - part.x, row + tilePart.y - part.y);
+            previewUv.setXY(index, (tile.x + column + .5) / width, 1 - (tile.y + row + .5) / height);
+          }
+          continue;
+        }
         let left = Infinity;
         let right = -Infinity;
         let top = Infinity;

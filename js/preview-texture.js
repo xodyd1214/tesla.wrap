@@ -35,14 +35,14 @@ function nearestSolidPixels(atlas, part) {
   );
 }
 
-// Interpolated mesh UVs can cross gaps in a panel's silhouette. Give each
-// panel a separate rectangle whose gaps repeat that panel's own edge pixels.
-export function createPreviewTexture(atlas) {
+// Interpolated mesh UVs can cross gaps in an island's silhouette. Give each
+// island a separate rectangle whose gaps repeat that island's own edge pixels.
+export function createPreviewTexture(atlas, parts) {
   const tiles = new Map();
   let x = 0;
   let y = 1; // The first row supplies white for faces without a template panel.
   let rowHeight = 0;
-  for (const part of [...atlas.parts].sort((a, b) => b.height - a.height)) {
+  for (const part of [...parts].sort((a, b) => b.height - a.height)) {
     if (x + part.width > atlas.width) {
       x = 0;
       y += rowHeight;
