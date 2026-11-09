@@ -25,7 +25,7 @@ export function createDrawingBoard(root, { commit, preview }) {
   const stage = get('drawing-stage');
   const widthInput = get('drawing-width');
   const toolButtons = root.querySelectorAll('[data-drawing-tool]');
-  let part, ink, outline, maskPixels, inverse, stroke;
+  let part, ink, background, outline, maskPixels, inverse, stroke;
   let tool = 'pen';
   let turns = 0;
   let frame = 0;
@@ -54,11 +54,10 @@ export function createDrawingBoard(root, { commit, preview }) {
     ctx.globalCompositeOperation = 'source-in';
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, part.width, part.height);
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.drawImage(background.canvas, 0, 0);
     const drawn = stroke?.canvas || ink;
-    if (drawn) {
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.drawImage(drawn, 0, 0);
-    }
+    if (drawn) ctx.drawImage(drawn, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.drawImage(outline, 0, 0);
     ctx.restore();
@@ -153,12 +152,14 @@ export function createDrawingBoard(root, { commit, preview }) {
 
   return {
     show(next, nextInk) {
-      if (part === next && ink === nextInk) return;
+      const partChanged = part !== next;
+      if (!partChanged && ink === nextInk) return false;
       if (stroke) {
         stroke = null;
         preview();
       }
-      if (part !== next) {
+      if (partChanged) {
+        background = next ? surface(next.width, next.height) : null;
         maskPixels = next?.mask.getContext('2d').getImageData(0, 0, next.width, next.height).data;
         outline = next ? partOutline(next.width, next.height, maskPixels) : null;
         setTurns(0);
@@ -170,6 +171,14 @@ export function createDrawingBoard(root, { commit, preview }) {
       get('drawing-tools').disabled = !part;
       get('drawing-clear').disabled = !ink;
       get('drawing-part').textContent = part?.label || '';
+      requestDraw();
+      return partChanged && !!part;
+    },
+    setBackground(target, source) {
+      if (part !== target) return;
+      const { width, height } = target;
+      background.ctx.clearRect(0, 0, width, height);
+      background.ctx.drawImage(source, 0, 0, width, height, 0, 0, width, height);
       requestDraw();
     },
     draft(target) {

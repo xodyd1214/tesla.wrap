@@ -1,6 +1,6 @@
 import { loadTemplate, matchingModel3Templates, models, selectionBounds, surface } from './templates.js?v=4';
 import { withProjectStore } from './projects.js';
-import { createDrawingBoard } from './drawing.js?v=1';
+import { createDrawingBoard } from './drawing.js?v=2';
 
 const $ = id => document.getElementById(id);
 const atlasCanvas = $('atlas');
@@ -239,6 +239,8 @@ function renderTexture(includeDraft = true) {
     const layer = getImageAt(part.id);
     if (layer?.projection) viewer.drawSurfaceLayer(ctx, layer, part);
     else if (layer) drawLayer(ctx, layer, part.x, part.y);
+    // Share the part's rendered background without baking the ink into it.
+    drawingBoard.setBackground(part, scratch.canvas);
     const drawing = (includeDraft && drawingBoard.draft(part)) || session.drawings[part.id];
     if (drawing) ctx.drawImage(drawing, 0, 0);
     ctx.globalCompositeOperation = 'destination-in';
@@ -388,8 +390,8 @@ function sync(dirty = true) {
   syncBasis();
   syncPlacement();
   const drawingPart = session.selected.size === 1 ? selectedParts()[0] : null;
-  drawingBoard.show(drawingPart, drawingPart && session.drawings[drawingPart.id]);
-  scheduleRender(dirty);
+  const drawingChanged = drawingBoard.show(drawingPart, drawingPart && session.drawings[drawingPart.id]);
+  scheduleRender(dirty || drawingChanged);
 }
 
 function syncPlacement() {
