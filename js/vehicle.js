@@ -4,7 +4,9 @@ import { createPreviewTexture } from './preview-texture.js?v=2';
 import { createFrontProfile, createSurfaceWrap, frontDistance } from './surface-wrap.js?v=2';
 
 const paintShells = new Set(['Geohoodsub00021Mtl', 'Georimblurlfsub01Mtl']);
-const highlandRearPanels = new Set(['trunk', 'trim-rear', 'bumper-rear']);
+const highlandContourPanels = new Set([
+  'bumper-front', 'fender-front-l', 'fender-front-r', 'trunk', 'trim-rear', 'bumper-rear',
+]);
 // Named body islands in the credited 2021 Model Y mesh.
 const modelYPanels = {
   'MY-291': 'mirror-r', 'MY-292': 'mirror-l',
@@ -85,21 +87,33 @@ function materialFor(name, original) {
   return dark('#34343b');
 }
 
-function projection(part, x, y, z, hoodSlope) {
+function projection(part, x, y, z, { highland, hoodSlope = 0 }) {
   // Trunk lids turn downward at the lip. Depth alone folds the vertical
   // panel back onto the deck above it.
   if (part === 'trunk') return [x, z - y];
   if (part === 'hood') return [x, (z + hoodSlope * y) / Math.hypot(1, hoodSlope)];
   if (part.startsWith('mirror')) return [x, z];
   if (part.startsWith('corner-')) return [-x, -y];
+  if (highland && part === 'bumper-front') {
+    // This island runs from the lower lip to the headlights in the PNG.
+    // Give the corners room for artwork as the bumper curves back to the wheels.
+    return [x + Math.sign(x) * .3 * Math.max(0, z + 2.25), y];
+  }
+  if (highland && part.startsWith('fender-front-')) {
+    // Unfold the top next to the hood together with the vertical wheel arch.
+    const across = y - Math.abs(x);
+    return [part.endsWith('-l') ? across : -across, z];
+  }
   if (part.startsWith('bumper') || part === 'trim-rear') {
     return [part === 'bumper-rear' ? -x : x, -y];
   }
   return [part.endsWith('-l') ? y : -y, z];
 }
 
-function highlandRearColumns(atlas, part, entries, left, top, uSpan, vSpan) {
+function highlandPanelColumns(atlas, part, entries, left, top, uSpan, vSpan) {
   const center = (part.width - 1) / 2;
+  const narrowFender = part.id.startsWith('fender-front-');
+  const hasBothSides = ranges => ranges.every(([start, end]) => start <= end);
   const rows = part.rows.map(([min, max], row) => {
     const maskOffset = (part.y + row) * atlas.width;
     const target = [[Infinity, -Infinity], [Infinity, -Infinity]];
@@ -110,7 +124,7 @@ function highlandRearColumns(atlas, part, entries, left, top, uSpan, vSpan) {
       range[0] = Math.min(range[0], column);
       range[1] = Math.max(range[1], column);
     }
-    if (!target.every(([start, end]) => start <= end)) return null;
+    if (narrowFender ? min > max : !hasBothSides(target)) return null;
 
     // Find the corresponding cross section of the mesh by intersecting its
     // projected triangle edges with this row.
@@ -128,11 +142,12 @@ function highlandRearColumns(atlas, part, entries, left, top, uSpan, vSpan) {
         range[1] = Math.max(range[1], u);
       }
     }
-    if (!source.every(([start, end]) => start <= end)) return null;
+    if (narrowFender ? source.every(([start, end]) => start > end) : !hasBothSides(source)) return null;
 
     // Match the two sides separately when both the mesh and the official
     // template have a cutout. Mapping across it repeats edge pixels by the lamps.
-    const split = target[1][0] - target[0][1] >= 5 && source[1][0] - source[0][1] >= .035;
+    const split = hasBothSides(target) && hasBothSides(source) &&
+      target[1][0] - target[0][1] >= 5 && source[1][0] - source[0][1] >= .035;
     return { source, target, split };
   });
 
@@ -143,12 +158,13 @@ function highlandRearColumns(atlas, part, entries, left, top, uSpan, vSpan) {
       return max > min ? min - part.x + (max - min) * (.03 + .94 * u) : part.width / 2;
     }
     const { source, target, split } = fit;
-    const first = split && u > .5 ? 1 : 0;
-    const last = split ? first : 1;
-    const start = source[first][0];
-    const end = source[last][1];
+    const side = u > .5 ? 1 : 0;
+    const start = split ? source[side][0] : Math.min(source[0][0], source[1][0]);
+    const end = split ? source[side][1] : Math.max(source[0][1], source[1][1]);
+    const x0 = split ? target[side][0] : Math.min(target[0][0], target[1][0]);
+    const x1 = split ? target[side][1] : Math.max(target[0][1], target[1][1]);
     const position = T.MathUtils.clamp((u - start) / Math.max(.001, end - start), 0, 1);
-    return T.MathUtils.lerp(target[first][0], target[last][1], .02 + .96 * position);
+    return T.MathUtils.lerp(x0, x1, .02 + .96 * position);
   }
 
   return (row, u) => {
@@ -178,6 +194,12 @@ function highlandShellSkin([x0, y0, z0, x1, y1, z1]) {
   // Keep the upper fender and its bevel together along the hood seam.
   if (innerX > .42 && innerX < .44 && y0 > .61 && y1 > .90 &&
     z0 > -2.18 && z0 < -2.17 && z1 > -1.03 && z1 < -.94) return 'fender-front-' + side;
+  // The wheel arch and the bumper corner meet at a diagonal seam. Keep each
+  // connected shell together rather than deciding from triangle centers.
+  if (innerX > .81 && y0 > .22 && y0 < .24 && y1 > .83 && y1 < .86 &&
+    z0 > -1.66 && z0 < -1.64 && z1 > -.94 && z1 < -.92) return 'fender-front-' + side;
+  if (innerX > .75 && y0 > .13 && y0 < .16 && y1 > .70 && y1 < .73 &&
+    z0 > -2.09 && z0 < -2.06 && z1 > -1.62 && z1 < -1.60) return 'bumper-front';
 
   // Use the indexed surfaces along the seams of the plate recess, trunk, and bumper.
   const halfWidth = Math.min(-x0, x1);
@@ -375,7 +397,7 @@ function prepareCar(source, model) {
         if (!projected.has(part)) projected.set(part, []);
         const entries = projected.get(part);
         for (const [j, id] of indices.entries()) {
-          const uv = projection(part, ...values[j], model.hoodSlope || 0);
+          const uv = projection(part, ...values[j], model);
           entries.push({ index: paintPositions.length / 3, u: uv[0], v: uv[1] });
           paintPositions.push(...values[j]);
           paintNormals.push(normal.getX(id), normal.getY(id), normal.getZ(id));
@@ -446,16 +468,16 @@ function prepareCar(source, model) {
         const hoodScale = id === 'hood' && model.hoodSlope ? Math.min(
           .94 * (part.width - 1) / uSpan, .97 * (part.height - 1) / vSpan,
         ) : 0;
-        const rearColumn = model.highland && highlandRearPanels.has(id)
-          ? highlandRearColumns(atlas, part, entries, left, top, uSpan, vSpan) : null;
+        const contourColumn = model.highland && highlandContourPanels.has(id)
+          ? highlandPanelColumns(atlas, part, entries, left, top, uSpan, vSpan) : null;
         for (const entry of entries) {
           let column, row;
           if (hoodScale) {
             column = (part.width - 1) / 2 + (entry.u - (left + right) / 2) * hoodScale;
             row = (part.height - 1) / 2 + (entry.v - (top + bottom) / 2) * hoodScale;
-          } else if (rearColumn) {
+          } else if (contourColumn) {
             row = (.015 + .97 * (entry.v - top) / vSpan) * (part.height - 1);
-            column = rearColumn(row, (entry.u - left) / uSpan);
+            column = contourColumn(row, (entry.u - left) / uSpan);
           } else {
             const v = (entry.v - top) / vSpan;
             const u = (entry.u - left) / uSpan;
