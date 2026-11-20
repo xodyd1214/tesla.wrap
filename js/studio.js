@@ -163,8 +163,8 @@ function getImageAt(id) {
   return session.layers.find(layer => layer.parts.includes(id));
 }
 
-function replaceSelectedWith(layer) {
-  const targets = session.selected;
+function replacePartsWith(layer) {
+  const targets = new Set(layer.parts);
   session.layers = session.layers.map(existing => ({
     ...existing, parts: existing.parts.filter(id => !targets.has(id)),
   })).filter(existing => existing.parts.length);
@@ -500,9 +500,10 @@ async function chooseBasis(basis) {
     return;
   }
   if (basis === placementBasis()) return;
+  const selection = session.selected;
   const projection = basis === 'vehicle' ? await currentProjection() : null;
-  if (version !== uploadVersion || layer !== activeForSelection() || mode !== 'image') return;
-  const parts = atlas.parts.filter(part => layer.parts.includes(part.id));
+  if (version !== uploadVersion || selection !== session.selected || layer !== activeForSelection() || mode !== 'image') return;
+  const parts = selectedParts().filter(part => layer.parts.includes(part.id));
   const replacement = layer.alternatePlacement || fitLayer(layer.asset, parts, projection);
   if (basis === 'vehicle' && (!projection || !replacement.projection)) {
     toast('이 파츠 조합에서는 차량 맞춤을 사용할 수 없어요.');
@@ -516,7 +517,9 @@ async function chooseBasis(basis) {
   }
   placing = !!replacement.projection;
   newImageBasis = basis;
-  transact(() => Object.assign(layer, { uprightInEditor: false }, replacement, { alternatePlacement }));
+  transact(() => replacePartsWith({
+    ...layer, uprightInEditor: false, ...replacement, parts: parts.map(part => part.id), alternatePlacement,
+  }));
   if (mobileLayout.matches) {
     setMobile(placing ? 'preview' : 'atlas');
     $('workspace').scrollIntoView({ block: 'start' });
@@ -703,7 +706,7 @@ async function loadImage(file, basis = placementBasis()) {
         session.colors = {};
         session.drawings = {};
       }
-      replaceSelectedWith(layer);
+      replacePartsWith(layer);
     });
     if (fullTemplate && mode !== 'image') setTool('image');
     if (mobileLayout.matches) {
@@ -987,7 +990,7 @@ $('apply-image').addEventListener('click', async () => {
   if (version !== uploadVersion || layer !== activeImage() || selection !== session.selected || mode !== 'image') return;
   const replacement = fitLayer(layer.asset, parts, projection);
   placing = !!replacement.projection;
-  transact(() => replaceSelectedWith(replacement));
+  transact(() => replacePartsWith(replacement));
   if (placing && mobileLayout.matches) setMobile('preview');
   if (onVehicle && !replacement.projection) toast('이 파츠 조합에는 원본 배치를 적용했어요.');
 });
@@ -1111,6 +1114,7 @@ $('undo').addEventListener('click', () => restore('undo', 'redo'));
 $('redo').addEventListener('click', () => restore('redo', 'undo'));
 $('reset').addEventListener('click', () => {
   if (!atlas) return;
+  uploadVersion++;
   transact(() => {
     session.colors = {};
     session.drawings = {};
